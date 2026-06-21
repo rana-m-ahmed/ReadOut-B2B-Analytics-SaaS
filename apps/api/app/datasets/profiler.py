@@ -145,11 +145,13 @@ def _build_success_profile(dataframe: pl.DataFrame, raw_headers: list[str]) -> D
     existing_names: set[str] = set()
     warnings: list[str] = []
     columns: list[ColumnProfile] = []
+    internal_names: list[str] = []
 
     for ordinal_position, raw_name in enumerate(raw_headers, start=1):
         series = dataframe.get_column(dataframe.columns[ordinal_position - 1])
         internal_name = slugify_column_name(raw_name, existing_names)
         existing_names.add(internal_name)
+        internal_names.append(internal_name)
 
         non_null_series = series.drop_nulls()
         row_count = max(dataframe.height, 1)
@@ -187,7 +189,8 @@ def _build_success_profile(dataframe: pl.DataFrame, raw_headers: list[str]) -> D
     quality_score = _quality_score(columns, duplicate_row_percent)
 
     parquet_buffer = io.BytesIO()
-    dataframe.write_parquet(parquet_buffer)
+    renamed_dataframe = dataframe.rename(dict(zip(dataframe.columns, internal_names, strict=False)))
+    renamed_dataframe.write_parquet(parquet_buffer)
 
     return DatasetProfileSuccess(
         success=True,

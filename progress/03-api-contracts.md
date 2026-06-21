@@ -47,6 +47,17 @@
   Notes:
   this route deliberately exposes both `display_name` and internal `name`; the frontend can ignore `name` in normal UI while future debug tooling can show the mapping. `missing_percent` is read from stored `profile.json`, while the rest of the column metadata comes from `dataset_columns`.
 
+- Method: `POST`
+  Path: `/ask`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape:
+  `{"dataset_id": "<uuid>", "question": "<string>", "session_id": "<uuid|null>"}`
+  Response shape:
+  `200 OK` with
+  `{"answer_id": "<uuid>", "summary": "<string>", "chart": <ChartPayload dict|null>, "query_plan": <AnalyticsIntent dict|null>, "confidence": "high", "suggested_followups": ["..."], "clarification_required": {"code": "<string>", "message": "<string>"} | null}`
+  Notes:
+  If the LLM determines the question is vague, or the validator rejects it, `clarification_required` is populated and `chart`/`query_plan` are null.
+
 - Internal contract: `groq_client` -> `intent_validator`
   Name: analytics intent JSON schema.
   Purpose:

@@ -419,10 +419,17 @@ def _resolve_comparison_period(date_range: DateRange) -> dict[str, str]:
         case "last_90_days":
             current_start = today - timedelta(days=89)
             current_end = today
-        case "this_month" | "last_month" | "this_year" | "year_to_date":
-            raise QueryCompilationError(
-                f"comparison/anomaly compilation for preset '{date_range.preset}' is not supported yet; use explicit dates"
-            )
+        case "this_month":
+            current_start = today.replace(day=1)
+            current_end = today
+        case "last_month":
+            previous_end = today.replace(day=1) - timedelta(days=1)
+            previous_start = previous_end.replace(day=1)
+            current_start = previous_start
+            current_end = previous_end
+        case "this_year" | "year_to_date":
+            current_start = today.replace(month=1, day=1)
+            current_end = today
         case _:
             raise QueryCompilationError(f"Unsupported validated preset '{date_range.preset}'")
 

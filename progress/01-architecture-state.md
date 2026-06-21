@@ -139,3 +139,10 @@ Update 2026-06-20:
 - `apps/api/app/analytics/result_formatter.py`: implemented.
 - `apps/api/tests/unit/test_chart_recommender.py`: implemented.
 - `apps/api/tests/unit/test_result_formatter.py`: implemented.
+- `apps/api/app/nlq/safety.py`: implemented.
+- `apps/api/app/nlq/prompt_builder.py`: implemented.
+- `apps/api/tests/unit/test_prompt_builder.py`: implemented.
+- `apps/api/app/nlq/groq_client.py`: implemented.
+- `apps/api/tests/unit/test_groq_client.py`: implemented.
+- `apps/api/app/api/routes_ask.py`: implemented with a TODO for Phase 5 context resolution.
+- `apps/api/tests/integration/test_routes_ask.py`: implemented.

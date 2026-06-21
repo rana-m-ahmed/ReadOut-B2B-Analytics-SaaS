@@ -18,8 +18,8 @@ from app.datasets.demo_generation import (
 )
 from app.datasets.storage_service import DatasetStorageService
 from app.datasets.upload_service import DatasetUploadService, UploadResult
-from app.db.models import Dataset, Workspace, WorkspaceCreate
-from app.db.repositories import DatasetRepository, WorkspaceRepository
+from app.db.models import Dataset, DatasetColumnCreate, Workspace, WorkspaceCreate
+from app.db.repositories import DatasetColumnRepository, DatasetRepository, WorkspaceRepository
 from app.db.supabase_client import get_supabase_client
 
 
@@ -55,11 +55,13 @@ class DemoSeedService:
         *,
         workspace_repository: WorkspaceRepository | None = None,
         dataset_repository: DatasetRepository | None = None,
+        dataset_column_repository: DatasetColumnRepository | None = None,
         upload_service: DatasetUploadService | None = None,
         storage_service: DatasetStorageService | None = None,
     ) -> None:
         self._workspaces = workspace_repository or WorkspaceRepository()
         self._datasets = dataset_repository or DatasetRepository()
+        self._columns = dataset_column_repository or DatasetColumnRepository()
         self._storage = storage_service or DatasetStorageService()
         self._upload_service = upload_service or DatasetUploadService(
             dataset_repository=self._datasets,
@@ -87,6 +89,22 @@ class DemoSeedService:
                 source_type="demo_seed",
             )
         )
+        if upload_result.profile:
+            for column in upload_result.profile.columns:
+                self._columns.create(
+                    workspace.id,
+                    DatasetColumnCreate(
+                        dataset_id=upload_result.dataset.id,
+                        name=column.name,
+                        display_name=column.display_name,
+                        data_type=column.data_type,
+                        ordinal_position=column.ordinal_position,
+                        is_nullable=column.is_nullable,
+                        semantic_role=column.semantic_role,
+                        sample_values=column.sample_values,
+                    ),
+                )
+
         return DemoSeedResult(
             workspace=workspace,
             dataset=upload_result.dataset,
