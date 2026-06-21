@@ -46,7 +46,7 @@ def execute_dataset_query(
     workspace_id: UUID,
     dataset_id: UUID,
     sql: str,
-    parameters: Sequence[Any] | None = None,
+    parameters: Sequence[Any] | dict[str, Any] | None = None,
     *,
     settings: Settings | None = None,
     dataset_repository: DatasetRepository | None = None,
@@ -71,7 +71,7 @@ def execute_dataset_query(
         return _execute_against_parquet(
             parquet_path=temp_path,
             sql=sql,
-            parameters=parameters or (),
+            parameters=parameters if parameters is not None else (),
             settings=resolved_settings,
         )
     finally:
@@ -105,7 +105,7 @@ def _execute_against_parquet(
     *,
     parquet_path: Path,
     sql: str,
-    parameters: Sequence[Any],
+    parameters: Sequence[Any] | dict[str, Any],
     settings: Settings,
 ) -> QueryResult:
     connection = duckdb.connect(
@@ -121,8 +121,14 @@ def _execute_against_parquet(
             [str(parquet_path)],
         )
         connection.execute("SET enable_external_access=false")
-        limited_sql = f"SELECT * FROM ({sql}) AS __readout_query LIMIT ?"
-        bound_parameters = [*parameters, settings.MAX_RESULT_ROWS + 1]
+        
+        if isinstance(parameters, dict):
+            limited_sql = f"SELECT * FROM ({sql}) AS __readout_query LIMIT $__readout_limit"
+            bound_parameters = {**parameters, "__readout_limit": settings.MAX_RESULT_ROWS + 1}
+        else:
+            limited_sql = f"SELECT * FROM ({sql}) AS __readout_query LIMIT ?"
+            bound_parameters = [*parameters, settings.MAX_RESULT_ROWS + 1]
+            
         timer = threading.Timer(float(settings.QUERY_TIMEOUT_SECONDS), connection.interrupt)
         timer.daemon = True
         try:
