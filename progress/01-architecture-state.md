@@ -154,3 +154,7 @@ Update 2026-06-20:
 - `apps/api/tests/unit/test_insight_ranker.py`: implemented.
 - `apps/api/app/insights/insight_writer.py`: implemented.
 - `apps/api/tests/unit/test_insight_writer.py`: implemented.
+
+- `apps/api/app/anomalies/zscore_detector.py`: implemented interpretable univariate anomaly detection.
+- `apps/api/app/anomalies/isolation_forest_detector.py`: implemented scikit-learn multivariate anomaly detection.
+- `apps/api/app/anomalies/anomaly_explainer.py`: implemented anomaly explanation generation with amber-never-red tone checks.
