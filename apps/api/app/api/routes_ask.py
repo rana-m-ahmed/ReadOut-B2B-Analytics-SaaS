@@ -59,6 +59,7 @@ class AskResponse(BaseModel):
     confidence: str | None = None
     suggested_followups: list[str] = Field(default_factory=list)
     clarification_required: ClarificationRejection | None = None
+    session_id: UUID | None = None
 
 
 @router.post("", response_model=AskResponse)
@@ -93,13 +94,29 @@ async def ask_question(
     msg_repo = AskMessageRepository()
     session_repo = AskSessionRepository()
     history = []
+    raw_intent = None
     
     if request.session_id:
-        # TODO(phase-5): implement full context-merging logic via context_resolver.py
         messages = msg_repo.list_for_session(workspace_id, request.session_id)
-        # simplistic translation for now
-        for m in sorted(messages, key=lambda x: x.created_at)[-settings.ASK_CONTEXT_TURN_LIMIT:]:
+        prior_intent_dict = None
+        for m in sorted(messages, key=lambda x: x.created_at):
             history.append({"role": m.role, "content": m.content})
+            if m.role == "assistant" and m.chart_spec and "meta" in m.chart_spec and "intent" in m.chart_spec["meta"]:
+                prior_intent_dict = m.chart_spec["meta"]["intent"]
+                
+        if prior_intent_dict:
+            try:
+                from app.nlq.schemas import analytics_intent_adapter
+                parsed_prior_intent = analytics_intent_adapter.validate_python(prior_intent_dict)
+                from app.nlq.context_resolver import resolve_context
+                resolved = resolve_context(parsed_prior_intent, request.question, dataset_columns)
+                if resolved != "treat_as_fresh":
+                    raw_intent = resolved
+            except Exception as e:
+                logger.warning(f"Failed to resolve context: {e}")
+        
+        # limit history sent to LLM
+        history = history[-settings.ASK_CONTEXT_TURN_LIMIT:]
     else:
         # create new session
         session = session_repo.create(
@@ -110,7 +127,8 @@ async def ask_question(
 
     # 4. Generate Intent
     try:
-        raw_intent = await get_intent(request.question, dataset_columns, history, settings)
+        if raw_intent is None:
+            raw_intent = await get_intent(request.question, dataset_columns, history, settings)
     except UpstreamLLMError as e:
         # Graceful degradation
         logger.warning(f"UpstreamLLMError during get_intent: {e}")
@@ -140,6 +158,7 @@ async def ask_question(
                 message=validation_result.rejection.message,
             ),
             suggested_followups=["Can you rephrase your question?"],
+            session_id=request.session_id,
         )
 
     validated_intent = validation_result
@@ -153,6 +172,7 @@ async def ask_question(
                 code="clarification_required",
                 message="The question is ambiguous. Please specify what metrics or dimensions you want to see.",
             ),
+            session_id=request.session_id,
         )
 
     # Determine execution workspace (demo dataset is in its own workspace)
@@ -175,23 +195,27 @@ async def ask_question(
         if len(result_df.columns) > 1:
             result_shape = "time_series" if "bucket" in result_df.columns else "grouped"
             
-        chart_type = recommend_chart_type(result_df)
+        chart_type = validated_intent.intent.chart_hint or recommend_chart_type(result_df)
         
         chart_payload = format_results(
             result=result_df,
             title="Analysis Result",
             description=request.question,
             settings=settings,
+            override_chart_type=validated_intent.intent.chart_hint
         )
+        chart_payload.meta["intent"] = validated_intent.intent.model_dump()
     except QueryCompilationError as e:
         logger.error(f"Query compilation failed: {e}")
         return AskResponse(
             summary="I couldn't process that query. Please try rephrasing.",
+            session_id=request.session_id,
         )
     except Exception as e:
         logger.error(f"Execution or formatting failed: {e}")
         return AskResponse(
             summary="An error occurred while analyzing the data. Please try rephrasing.",
+            session_id=request.session_id,
         )
 
     # 7. Generate one-sentence summary
@@ -227,6 +251,30 @@ async def ask_question(
         )
     )
 
+    # Generate suggested followups deterministically
+    followups = []
+    used_cols = set(validated_intent.intent.group_by)
+    unused_dims = [c for c in dataset_columns if (c.semantic_role == "dimension" or c.data_type == "category") and c.name not in used_cols]
+    
+    if validated_intent.intent.intent in (IntentType.SINGLE_METRIC, IntentType.TIME_SERIES):
+        if unused_dims:
+            followups.append(f"Break that down by {unused_dims[0].display_name or unused_dims[0].name.replace('_', ' ')}")
+        followups.append("Compare with previous period")
+        if len(unused_dims) > 1:
+            followups.append(f"Only for a specific {unused_dims[1].display_name or unused_dims[1].name.replace('_', ' ')}")
+    elif validated_intent.intent.intent == IntentType.GROUPED_METRIC:
+        followups.append("Show as a pie chart")
+        if unused_dims:
+            followups.append(f"Break it down by {unused_dims[0].display_name or unused_dims[0].name.replace('_', ' ')} instead")
+        followups.append("What caused that?")
+    else:
+        followups.append("What caused that?")
+        followups.append("Show as a table")
+        if unused_dims:
+            followups.append(f"Filter by {unused_dims[0].display_name or unused_dims[0].name.replace('_', ' ')}")
+            
+    suggested_followups = list(dict.fromkeys(followups))[:3]
+
     # 9. Return Response
     return AskResponse(
         answer_id=answer_id,
@@ -234,5 +282,6 @@ async def ask_question(
         chart=chart_payload.model_dump(),
         query_plan=validated_intent.intent.model_dump(),
         confidence="high",
-        suggested_followups=["What else can you tell me?", "Show me a different metric."],
+        suggested_followups=suggested_followups,
+        session_id=request.session_id,
     )

@@ -72,10 +72,11 @@ def format_results(
     result: QueryResult,
     title: str,
     description: str,
-    settings: Settings | None = None
+    settings: Settings | None = None,
+    override_chart_type: str | None = None
 ) -> ChartPayload:
     resolved_settings = settings or get_settings()
-    chart_type = recommend_chart_type(result)
+    chart_type = override_chart_type or recommend_chart_type(result)
     
     x_key = None
     y_keys = []

@@ -54,9 +54,16 @@
   `{"dataset_id": "<uuid>", "question": "<string>", "session_id": "<uuid|null>"}`
   Response shape:
   `200 OK` with
-  `{"answer_id": "<uuid>", "summary": "<string>", "chart": <ChartPayload dict|null>, "query_plan": <AnalyticsIntent dict|null>, "confidence": "high", "suggested_followups": ["..."], "clarification_required": {"code": "<string>", "message": "<string>"} | null}`
+  `{"answer_id": "<uuid>", "session_id": "<uuid>", "summary": "<string>", "chart": <ChartPayload dict|null>, "query_plan": <AnalyticsIntent dict|null>, "confidence": "high", "suggested_followups": ["..."], "clarification_required": {"code": "<string>", "message": "<string>"} | null}`
   Notes:
   If the LLM determines the question is vague, or the validator rejects it, `clarification_required` is populated and `chart`/`query_plan` are null.
+  Context resolution for follow-up questions relies on deterministic pattern matching over the prior turn's validated intent:
+  - "break that down by X" / "break down by X": keeps the existing metric and date range, updates the intent to `grouped_metric` if it was single/time-series, and overrides `group_by` with X.
+  - "compare with previous period" / "compare ... previous": overrides the intent to `comparison` while keeping the current metric and group_by.
+  - "only for X": searches dataset column `sample_values` for X and appends a strict equality `FilterClause`.
+  - "show as a X chart": keeps the exact intent but sets `chart_hint` to X, provided X is valid for the existing intent's shape.
+  - "what caused that?" / "why did": creates an `anomaly_explanation` / `grouped_metric` candidate intent grouping by the first available dimension/category column to produce a ranked breakdown.
+  If the follow-up doesn't match any pattern, it is treated as a "fresh" question and sent to the LLM directly.
 
 - Internal contract: `groq_client` -> `intent_validator`
   Name: analytics intent JSON schema.

@@ -142,7 +142,15 @@ Update 2026-06-20:
 - `apps/api/app/nlq/safety.py`: implemented.
 - `apps/api/app/nlq/prompt_builder.py`: implemented.
 - `apps/api/tests/unit/test_prompt_builder.py`: implemented.
-- `apps/api/app/nlq/groq_client.py`: implemented.
-- `apps/api/tests/unit/test_groq_client.py`: implemented.
-- `apps/api/app/api/routes_ask.py`: implemented with a TODO for Phase 5 context resolution.
+- `apps/api/app/api/routes_ask.py`: implemented including Phase 5 context resolution via chart payload meta injection.
 - `apps/api/tests/integration/test_routes_ask.py`: implemented.
+- `apps/api/app/nlq/context_resolver.py`: implemented deterministic NLP intent merging.
+- `apps/api/tests/unit/test_context_resolver.py`: implemented pattern coverage.
+- `apps/api/tests/integration/test_ask_followups.py`: implemented end-to-end followups sequence verification.
+
+- `apps/api/app/insights/insight_scanner.py`: implemented.
+- `apps/api/tests/unit/test_insight_scanner.py`: implemented.
+- `apps/api/app/insights/insight_ranker.py`: implemented.
+- `apps/api/tests/unit/test_insight_ranker.py`: implemented.
+- `apps/api/app/insights/insight_writer.py`: implemented.
+- `apps/api/tests/unit/test_insight_writer.py`: implemented.

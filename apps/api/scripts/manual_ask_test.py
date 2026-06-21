@@ -54,33 +54,37 @@ async def main():
     headers = {"Authorization": f"Bearer {token}"}
     
     questions = [
-        "What is the total revenue?",
-        "Show me sales by region.",
-        "How did revenue trend over the last 6 months?",
-        "What is the correlation between discount and revenue?",
-        "Who are the top 5 customers?",
-        "Explain any anomalies in revenue.",
-        "Compare revenue this month to last month.",
-        "What is the proportion of revenue by segment?",
-        "Show me bottom 3 products.",
-        "What is the total discount given?"
+        "What is the total revenue for the last 30 days?",
+        "break that down by region",
+        "compare with previous period",
+        "show as a bar chart"
     ]
     
-    print(f"Running 10 questions against /ask... (Using Groq model {settings.GROQ_PRIMARY_MODEL})")
+    print(f"Running session followup sequence... (Using Groq model {settings.GROQ_PRIMARY_MODEL})")
     
+    session_id = None
     for i, q in enumerate(questions):
         print(f"\n[Q{i+1}] {q}")
-        resp = client.post("/ask", json={"dataset_id": str(demo_dataset.id), "question": q}, headers=headers, timeout=120.0)
+        payload = {"dataset_id": str(demo_dataset.id), "question": q}
+        if session_id:
+            payload["session_id"] = session_id
+            
+        resp = client.post("/ask", json=payload, headers=headers, timeout=120.0)
         
         if resp.status_code == 200:
             data = resp.json()
+            if session_id is None:
+                session_id = data.get("session_id")
+                print(f"-> Set session_id: {session_id}")
             print(f"-> Status: 200 OK")
             if data.get("clarification_required"):
                 print(f"-> Clarification: {data['clarification_required']}")
             else:
                 print(f"-> Summary: {data['summary']}")
+                print(f"-> Intent: {data['query_plan']['intent']}")
                 if data.get("chart"):
                     print(f"-> Chart Type: {data['chart']['type']}")
+                print(f"-> Suggested followups: {data.get('suggested_followups')}")
         else:
             print(f"-> Failed: {resp.status_code} {resp.text}")
 
