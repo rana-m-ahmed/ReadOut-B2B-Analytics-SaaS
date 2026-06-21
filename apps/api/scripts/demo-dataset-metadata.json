@@ -1,0 +1,26 @@
+{
+  "anomaly": {
+    "product_category": "Electronics",
+    "region": "West",
+    "revenue_drop_percent_vs_trailing_baseline": 45,
+    "true_reason": "A short-lived West-region electronics fulfillment outage coincided with a paused paid push, cutting sell-through for one week in April.",
+    "week_end": "2025-04-20",
+    "week_start": "2025-04-14"
+  },
+  "columns": [
+    "order_id",
+    "order_date",
+    "revenue",
+    "region",
+    "product_category",
+    "customer_type",
+    "marketing_channel",
+    "units",
+    "discount_percent",
+    "gross_margin",
+    "payment_method"
+  ],
+  "dataset_year": 2025,
+  "row_count": 20086,
+  "seed": 20260417
+}
