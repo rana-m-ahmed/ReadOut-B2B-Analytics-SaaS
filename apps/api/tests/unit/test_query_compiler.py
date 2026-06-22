@@ -133,6 +133,23 @@ def test_time_series_compiles_and_executes() -> None:
     ]
 
 
+def test_time_series_preset_uses_dataset_relative_anchor() -> None:
+    validated = _validated_intent(
+        {
+            "intent": "time_series",
+            "metric": "revenue",
+            "aggregation": "sum",
+            "date_range": {"column": "order_date", "preset": "last_30_days"},
+        }
+    )
+
+    compiled = compile_analytics_intent(validated, _settings())
+
+    assert '(SELECT max("order_date") FROM dataset)' in compiled.sql
+    rows = _run(compiled.sql, compiled.params)
+    assert len(rows) == 6
+
+
 def test_grouped_metric_compiles_and_executes() -> None:
     validated = _validated_intent(
         {

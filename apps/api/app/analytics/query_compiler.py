@@ -168,9 +168,20 @@ def _compile_comparison(metric: str, aggregation: AggregationType, intent: Any, 
         raise QueryCompilationError("comparison intent requires a validated date_range")
 
     params: dict[str, Any] = {"limit": limit}
-    period = _resolve_comparison_period(intent.date_range)
-    params.update(period)
     non_date_where = _build_where_clause(intent, params, include_date_range=False)
+    if intent.date_range.preset is not None:
+        period_sql = _preset_period_expressions(intent.date_range.column, intent.date_range.preset)
+        current_period_condition = (
+            f"\"{intent.date_range.column}\" BETWEEN {period_sql['current_start']} AND {period_sql['current_end']}"
+        )
+        previous_period_condition = (
+            f"\"{intent.date_range.column}\" BETWEEN {period_sql['previous_start']} AND {period_sql['previous_end']}"
+        )
+    else:
+        period = _resolve_comparison_period(intent.date_range)
+        params.update(period)
+        current_period_condition = f"\"{intent.date_range.column}\" BETWEEN $current_start AND $current_end"
+        previous_period_condition = f"\"{intent.date_range.column}\" BETWEEN $previous_start AND $previous_end"
 
     if intent.group_by:
         group_select = _group_select(intent.group_by)
@@ -185,14 +196,14 @@ def _compile_comparison(metric: str, aggregation: AggregationType, intent: Any, 
             f"    SELECT {group_select},\n"
             f'           {aggregation.value}("{metric}") AS current_value\n'
             f"    FROM {DATASET_TABLE_NAME}\n"
-            f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $current_start AND $current_end\n"
+            f"    {non_date_where} AND {current_period_condition}\n"
             f"    GROUP BY {group_by_ordinals}\n"
             "),\n"
             "previous_period AS (\n"
             f"    SELECT {group_select},\n"
             f'           {aggregation.value}("{metric}") AS previous_value\n'
             f"    FROM {DATASET_TABLE_NAME}\n"
-            f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $previous_start AND $previous_end\n"
+            f"    {non_date_where} AND {previous_period_condition}\n"
             f"    GROUP BY {group_by_ordinals}\n"
             ")\n"
             f"SELECT {coalesced_columns},\n"
@@ -214,12 +225,12 @@ def _compile_comparison(metric: str, aggregation: AggregationType, intent: Any, 
         "WITH current_period AS (\n"
         f'    SELECT {aggregation.value}("{metric}") AS current_value\n'
         f"    FROM {DATASET_TABLE_NAME}\n"
-        f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $current_start AND $current_end\n"
+        f"    {non_date_where} AND {current_period_condition}\n"
         "),\n"
         "previous_period AS (\n"
         f'    SELECT {aggregation.value}("{metric}") AS previous_value\n'
         f"    FROM {DATASET_TABLE_NAME}\n"
-        f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $previous_start AND $previous_end\n"
+        f"    {non_date_where} AND {previous_period_condition}\n"
         ")\n"
         "SELECT current_value,\n"
         "       previous_value,\n"
@@ -239,19 +250,31 @@ def _compile_anomaly_explanation(metric: str, intent: Any, limit: int) -> Compil
         raise QueryCompilationError("anomaly_explanation intent requires a validated date_range")
 
     params: dict[str, Any] = {"limit": limit}
-    period = _resolve_comparison_period(intent.date_range)
-    params.update(period)
     non_date_where = _build_where_clause(intent, params, include_date_range=False)
+    if intent.date_range.preset is not None:
+        period_sql = _preset_period_expressions(intent.date_range.column, intent.date_range.preset)
+        current_period_condition = (
+            f"\"{intent.date_range.column}\" BETWEEN {period_sql['current_start']} AND {period_sql['current_end']}"
+        )
+        previous_period_condition = (
+            f"\"{intent.date_range.column}\" BETWEEN {period_sql['previous_start']} AND {period_sql['previous_end']}"
+        )
+    else:
+        period = _resolve_comparison_period(intent.date_range)
+        params.update(period)
+        current_period_condition = f"\"{intent.date_range.column}\" BETWEEN $current_start AND $current_end"
+        previous_period_condition = f"\"{intent.date_range.column}\" BETWEEN $previous_start AND $previous_end"
+
     sql = (
         "WITH anomaly_window AS (\n"
         f'    SELECT avg("{metric}") AS anomaly_value\n'
         f"    FROM {DATASET_TABLE_NAME}\n"
-        f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $current_start AND $current_end\n"
+        f"    {non_date_where} AND {current_period_condition}\n"
         "),\n"
         "baseline_window AS (\n"
         f'    SELECT avg("{metric}") AS baseline_value\n'
         f"    FROM {DATASET_TABLE_NAME}\n"
-        f"    {non_date_where} AND \"{intent.date_range.column}\" BETWEEN $previous_start AND $previous_end\n"
+        f"    {non_date_where} AND {previous_period_condition}\n"
         ")\n"
         "SELECT anomaly_value,\n"
         "       baseline_value,\n"
@@ -343,16 +366,83 @@ def _compile_date_range(date_range: DateRange, params: dict[str, Any]) -> str:
 
 
 def _preset_date_clause(column: str, preset: str) -> str:
+    period = _preset_period_expressions(column, preset)
+    return f'"{column}" BETWEEN {period["current_start"]} AND {period["current_end"]}'
+
+
+def _preset_period_expressions(column: str, preset: str) -> dict[str, str]:
+    anchor = f'(SELECT max("{column}") FROM {DATASET_TABLE_NAME})'
+    quarter_start = f"date_trunc('quarter', {anchor})"
+    month_start = f"date_trunc('month', {anchor})"
+    year_start = f"date_trunc('year', {anchor})"
+
     mapping = {
-        "today": f'"{column}" BETWEEN CURRENT_DATE AND CURRENT_DATE',
-        "yesterday": f'"{column}" BETWEEN CURRENT_DATE - INTERVAL 1 DAY AND CURRENT_DATE - INTERVAL 1 DAY',
-        "last_7_days": f'"{column}" BETWEEN CURRENT_DATE - INTERVAL 6 DAY AND CURRENT_DATE',
-        "last_30_days": f'"{column}" BETWEEN CURRENT_DATE - INTERVAL 29 DAY AND CURRENT_DATE',
-        "last_90_days": f'"{column}" BETWEEN CURRENT_DATE - INTERVAL 89 DAY AND CURRENT_DATE',
-        "this_month": f'"{column}" BETWEEN date_trunc(\'month\', CURRENT_DATE) AND CURRENT_DATE',
-        "last_month": f'"{column}" BETWEEN date_trunc(\'month\', CURRENT_DATE - INTERVAL 1 MONTH) AND date_trunc(\'month\', CURRENT_DATE) - INTERVAL 1 DAY',
-        "this_year": f'"{column}" BETWEEN date_trunc(\'year\', CURRENT_DATE) AND CURRENT_DATE',
-        "year_to_date": f'"{column}" BETWEEN date_trunc(\'year\', CURRENT_DATE) AND CURRENT_DATE',
+        "today": {
+            "current_start": f"CAST({anchor} AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({anchor} - INTERVAL 1 DAY AS DATE)",
+            "previous_end": f"CAST({anchor} - INTERVAL 1 DAY AS DATE)",
+        },
+        "yesterday": {
+            "current_start": f"CAST({anchor} - INTERVAL 1 DAY AS DATE)",
+            "current_end": f"CAST({anchor} - INTERVAL 1 DAY AS DATE)",
+            "previous_start": f"CAST({anchor} - INTERVAL 2 DAY AS DATE)",
+            "previous_end": f"CAST({anchor} - INTERVAL 2 DAY AS DATE)",
+        },
+        "last_7_days": {
+            "current_start": f"CAST({anchor} - INTERVAL 6 DAY AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({anchor} - INTERVAL 13 DAY AS DATE)",
+            "previous_end": f"CAST({anchor} - INTERVAL 7 DAY AS DATE)",
+        },
+        "last_30_days": {
+            "current_start": f"CAST({anchor} - INTERVAL 29 DAY AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({anchor} - INTERVAL 59 DAY AS DATE)",
+            "previous_end": f"CAST({anchor} - INTERVAL 30 DAY AS DATE)",
+        },
+        "last_90_days": {
+            "current_start": f"CAST({anchor} - INTERVAL 89 DAY AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({anchor} - INTERVAL 179 DAY AS DATE)",
+            "previous_end": f"CAST({anchor} - INTERVAL 90 DAY AS DATE)",
+        },
+        "this_month": {
+            "current_start": f"CAST({month_start} AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({month_start} - INTERVAL 1 MONTH AS DATE)",
+            "previous_end": f"CAST({month_start} - INTERVAL 1 DAY AS DATE)",
+        },
+        "last_month": {
+            "current_start": f"CAST({month_start} - INTERVAL 1 MONTH AS DATE)",
+            "current_end": f"CAST({month_start} - INTERVAL 1 DAY AS DATE)",
+            "previous_start": f"CAST({month_start} - INTERVAL 2 MONTH AS DATE)",
+            "previous_end": f"CAST({month_start} - INTERVAL 1 MONTH - INTERVAL 1 DAY AS DATE)",
+        },
+        "this_quarter": {
+            "current_start": f"CAST({quarter_start} AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({quarter_start} - INTERVAL 3 MONTH AS DATE)",
+            "previous_end": f"CAST({quarter_start} - INTERVAL 1 DAY AS DATE)",
+        },
+        "last_quarter": {
+            "current_start": f"CAST({quarter_start} - INTERVAL 3 MONTH AS DATE)",
+            "current_end": f"CAST({quarter_start} - INTERVAL 1 DAY AS DATE)",
+            "previous_start": f"CAST({quarter_start} - INTERVAL 6 MONTH AS DATE)",
+            "previous_end": f"CAST({quarter_start} - INTERVAL 3 MONTH - INTERVAL 1 DAY AS DATE)",
+        },
+        "this_year": {
+            "current_start": f"CAST({year_start} AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({year_start} - INTERVAL 1 YEAR AS DATE)",
+            "previous_end": f"CAST({year_start} - INTERVAL 1 DAY AS DATE)",
+        },
+        "year_to_date": {
+            "current_start": f"CAST({year_start} AS DATE)",
+            "current_end": f"CAST({anchor} AS DATE)",
+            "previous_start": f"CAST({year_start} - INTERVAL 1 YEAR AS DATE)",
+            "previous_end": f"CAST({year_start} - INTERVAL 1 DAY AS DATE)",
+        },
     }
     try:
         return mapping[preset]
@@ -365,6 +455,8 @@ def _resolve_time_granularity(date_range: DateRange | None) -> str:
         return "day"
     if date_range.preset in {"this_year", "year_to_date"}:
         return "month"
+    if date_range.preset in {"this_quarter", "last_quarter"}:
+        return "week"
     if date_range.preset in {"last_90_days", "this_month", "last_month"}:
         return "week"
     if date_range.start is None or date_range.end is None:

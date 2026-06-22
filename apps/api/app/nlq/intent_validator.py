@@ -54,6 +54,8 @@ VALID_DATE_PRESETS = {
     "last_7_days",
     "last_30_days",
     "last_90_days",
+    "this_quarter",
+    "last_quarter",
     "this_month",
     "last_month",
     "this_year",

@@ -82,6 +82,24 @@ def test_valid_intent_passes_unchanged() -> None:
     assert result.clamps == []
 
 
+def test_last_quarter_preset_is_accepted() -> None:
+    intent = analytics_intent_adapter.validate_python(
+        {
+            "intent": "grouped_metric",
+            "metric": "revenue",
+            "aggregation": "sum",
+            "group_by": ["region"],
+            "date_range": {"column": "order_date", "preset": "last_quarter"},
+        }
+    )
+
+    result = validate_analytics_intent(intent, _columns(), _settings())
+
+    assert isinstance(result, IntentValidationAccepted)
+    assert result.intent.date_range is not None
+    assert result.intent.date_range.preset == "last_quarter"
+
+
 def test_limit_above_max_result_rows_gets_clamped() -> None:
     intent = analytics_intent_adapter.validate_python(
         {

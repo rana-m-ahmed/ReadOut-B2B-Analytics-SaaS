@@ -160,3 +160,4 @@ Update 2026-06-20:
 - `apps/api/app/anomalies/isolation_forest_detector.py`: implemented scikit-learn multivariate anomaly detection.
 - `apps/api/app/anomalies/anomaly_explainer.py`: implemented anomaly explanation generation with amber-never-red tone checks.
 - `apps/api/app/api/routes_widgets.py`: implemented authenticated widget pinning from persisted ask/insight/anomaly payloads, workspace-scoped list/update/delete operations, and persisted dashboard drag-reorder layout updates.
+- `apps/api/tests/golden/test_golden_suite.py`: implemented as a CI-runnable but manually-gated real-Groq regression harness for the live `/ask` endpoint against the seeded public demo dataset. It preserves the required `Q9 -> Q10 -> Q11 -> Q12` follow-up session chain, records model path / compiled SQL / chart preview per question, and always writes a reviewable markdown results log even when the live run exposes failures.

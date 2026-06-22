@@ -26,3 +26,10 @@
   - **Issue found**: the new adversarial suite showed that `/ask` assumed `get_intent()` always returned an already-valid typed `AnalyticsIntent`. A malformed dict from a patched or future-regressed LLM boundary could therefore crash before reaching validator/compiler safety checks.
   - **Resolution**: `routes_ask.py` now re-validates any returned payload through `analytics_intent_adapter.validate_python()` and degrades malformed payloads into a clean `clarification_required` response. Nonexistent-column payloads still flow into `intent_validator`, which rejects them before DuckDB execution.
   - **Verification**: `apps/api/tests/integration/test_adversarial.py` now passes its malformed-payload, prompt-injection, cross-workspace dataset, and SQL-adversarial cases end to end.
+
+- **Accepted golden-suite misses as of 2026-06-22 (`23/25` pass)**
+  - **Q17: "Which weekday has the most orders?"**
+  - **Why it still misses**: the current analytics intent contract has only safe internal column references; it does not yet have a first-class `time_grain` / derived-dimension field for transformations like weekday extraction from `order_date`. Treating this as "orders by order_date" would be a misleading fake fix, so it remains an intentional miss until the schema/compiler are extended honestly.
+  - **Q24: "Show revenue and orders together."**
+  - **Why it still misses**: the current contract is single-metric by design. A faithful answer needs a multi-metric intent plus chart/formatter support for paired series, not a disguised one-metric fallback that only mentions one side of the request.
+  - **Status**: acceptable for this phase because the live golden suite now exceeds the pass bar at `23/25`, and both misses are traceable contract gaps rather than random reliability failures.

@@ -19,7 +19,7 @@ from app.api.routes_datasets import _resolve_current_workspace
 from app.db.models import AskMessageCreate, AskSessionCreate
 from app.db.repositories import AskMessageRepository, AskSessionRepository, DatasetColumnRepository, WorkspaceRepository, DatasetRepository
 from app.nlq.groq_client import generate_summary, get_intent
-from app.nlq.schemas import AnalyticsIntent, IntentType, analytics_intent_adapter
+from app.nlq.schemas import AggregationType, AnalyticsIntent, IntentType, analytics_intent_adapter
 from app.nlq.intent_validator import IntentValidationRejected, validate_analytics_intent
 from app.security.auth_guard import CurrentUser, get_current_user
 
@@ -47,6 +47,27 @@ def _normalize_llm_intent(raw_intent: object, session_id: UUID | None) -> Analyt
             "I couldn't interpret that request safely. Please try rephrasing it.",
             session_id,
         )
+
+
+def _repair_common_intent_shape(intent: AnalyticsIntent) -> AnalyticsIntent:
+    """Normalize a few recurring LLM formatting mistakes into the typed contract."""
+
+    metric = intent.metric
+    if metric is None:
+        return intent
+
+    metric_lower = metric.lower().strip()
+    if metric_lower.startswith("avg(") and metric_lower.endswith(")"):
+        return intent.model_copy(update={"metric": metric[4:-1].strip(), "aggregation": AggregationType.AVG})
+    if metric_lower.startswith("sum(") and metric_lower.endswith(")"):
+        return intent.model_copy(update={"metric": metric[4:-1].strip(), "aggregation": AggregationType.SUM})
+    if metric_lower.startswith("count(") and metric_lower.endswith(")"):
+        return intent.model_copy(update={"metric": metric[6:-1].strip(), "aggregation": AggregationType.COUNT})
+    if metric_lower.startswith("min(") and metric_lower.endswith(")"):
+        return intent.model_copy(update={"metric": metric[4:-1].strip(), "aggregation": AggregationType.MIN})
+    if metric_lower.startswith("max(") and metric_lower.endswith(")"):
+        return intent.model_copy(update={"metric": metric[4:-1].strip(), "aggregation": AggregationType.MAX})
+    return intent
 
 
 class AskRequest(BaseModel):
@@ -145,6 +166,11 @@ async def ask_question(
     # 4. Generate Intent
     try:
         if raw_intent is None:
+            from app.nlq.context_resolver import resolve_fresh_question
+            heuristic_intent = resolve_fresh_question(request.question, dataset_columns)
+            if heuristic_intent != "defer_to_llm":
+                raw_intent = heuristic_intent
+        if raw_intent is None:
             raw_intent = await get_intent(request.question, dataset_columns, history, settings)
     except UpstreamLLMError as e:
         # Graceful degradation
@@ -156,7 +182,7 @@ async def ask_question(
     normalized_intent = _normalize_llm_intent(raw_intent, request.session_id)
     if isinstance(normalized_intent, AskResponse):
         return normalized_intent
-    raw_intent = normalized_intent
+    raw_intent = _repair_common_intent_shape(normalized_intent)
 
     # 5. Validate Intent
     # intent_validator expects a slightly different shape for DatasetIntentColumn
