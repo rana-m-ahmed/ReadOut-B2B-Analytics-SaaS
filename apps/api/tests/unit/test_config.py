@@ -29,6 +29,10 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "MAX_CHART_PAYLOAD_KB",
         "ANON_SESSION_TTL_HOURS",
         "ASK_CONTEXT_TURN_LIMIT",
+        "ASK_RATE_LIMIT_REQUESTS",
+        "ASK_RATE_LIMIT_WINDOW_SECONDS",
+        "UPLOAD_URL_RATE_LIMIT_REQUESTS",
+        "UPLOAD_URL_RATE_LIMIT_WINDOW_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -70,6 +74,10 @@ def test_optional_defaults_apply_when_env_vars_absent(monkeypatch: pytest.Monkey
     assert settings.MAX_CHART_PAYLOAD_KB == 50
     assert settings.ANON_SESSION_TTL_HOURS == 72
     assert settings.ASK_CONTEXT_TURN_LIMIT == 4
+    assert settings.ASK_RATE_LIMIT_REQUESTS == 20
+    assert settings.ASK_RATE_LIMIT_WINDOW_SECONDS == 60
+    assert settings.UPLOAD_URL_RATE_LIMIT_REQUESTS == 10
+    assert settings.UPLOAD_URL_RATE_LIMIT_WINDOW_SECONDS == 60
 
 
 def test_allowed_origins_parses_comma_separated_env_string(

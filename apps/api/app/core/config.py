@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     MAX_CHART_PAYLOAD_KB: int = 50
     ANON_SESSION_TTL_HOURS: int = 72
     ASK_CONTEXT_TURN_LIMIT: int = 4
+    ASK_RATE_LIMIT_REQUESTS: int = Field(default=20, ge=1)
+    ASK_RATE_LIMIT_WINDOW_SECONDS: int = Field(default=60, ge=1)
+    UPLOAD_URL_RATE_LIMIT_REQUESTS: int = Field(default=10, ge=1)
+    UPLOAD_URL_RATE_LIMIT_WINDOW_SECONDS: int = Field(default=60, ge=1)
 
     # Groq rate limits are intentionally not configuration values here.
     # Free-tier RPM/RPD/TPM limits change without notice; Phase 4's groq_client

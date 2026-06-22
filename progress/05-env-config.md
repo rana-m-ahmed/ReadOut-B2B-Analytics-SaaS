@@ -15,4 +15,8 @@
 - `MAX_CHART_PAYLOAD_KB`: Max serialized chart payload size in kilobytes. Default: `50`.
 - `ANON_SESSION_TTL_HOURS`: Anonymous/demo session lifetime in hours. Default: `72`.
 - `ASK_CONTEXT_TURN_LIMIT`: Max prior turns carried into ask-context resolution. Default: `4`.
+- `ASK_RATE_LIMIT_REQUESTS`: Max `/ask` requests allowed per authenticated user within the configured sliding window. Default: `20`.
+- `ASK_RATE_LIMIT_WINDOW_SECONDS`: Sliding-window size for `/ask` per-user rate limiting. Default: `60`.
+- `UPLOAD_URL_RATE_LIMIT_REQUESTS`: Max `/datasets/upload-url` requests allowed per authenticated user within the configured sliding window. Default: `10`.
+- `UPLOAD_URL_RATE_LIMIT_WINDOW_SECONDS`: Sliding-window size for `/datasets/upload-url` per-user rate limiting. Default: `60`.
 - Note: Groq rate limits are NOT a config value — see `groq_client` design note in Phase 4, decisions-log entry.

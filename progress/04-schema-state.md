@@ -14,6 +14,7 @@ Deviations recorded from the original plan request:
 - `0004_rls_fix.sql` replaces `owns_workspace()` and `is_public_demo_workspace()` as `SECURITY DEFINER` helpers with `search_path = public` so child-table RLS checks can safely inspect `workspaces` without recursive policy re-entry.
 - 2026-06-21 verification result: after applying `0004_rls_fix.sql` to the live Supabase project, `test_rls_isolation.py` passed against real JWT-backed sessions. Verified behaviors: User A cannot read User B private rows across datasets/widgets/insights/anomalies/ask_messages, anonymous users can read the public demo dataset, and one anonymous user cannot read another anonymous user's private workspace or uploaded dataset.
 - 2026-06-21 profiling update: the `dataset_columns.name` / `display_name` split is now populated by real code, not just the schema. `schema_inference.py` slugifies raw CSV headers into safe internal names, and `profiler.py` preserves the original header in `display_name` while de-duplicating collisions for `name`.
+- 2026-06-22 security update: live verification exposed that anonymous owners could still read their own expired TTL workspaces until cleanup ran. `0005_anon_expiry_rls.sql` fixes this by making `owns_workspace()` require `(is_anonymous = false OR expires_at > now())` and by updating `workspaces.workspace_owner_access` to deny expired anonymous workspace rows immediately, even before `cleanup_expired_anonymous_workspaces()` executes.
 
 ```sql
 create extension if not exists pgcrypto;

@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import Settings, get_settings
 from app.core.errors import NotFoundError, ValidationError
+from app.core.rate_limit import enforce_upload_url_rate_limit
 from app.db.models import Dataset, DatasetColumnCreate, DatasetCreate, DatasetUpdate, Workspace
 from app.db.repositories import DatasetColumnRepository, DatasetRepository, WorkspaceRepository
 from app.datasets.profiler import DatasetProfileFailure, DatasetProfileSuccess, profile_csv_bytes
@@ -160,7 +161,7 @@ def _profile_response(dataset_id: UUID, profile: DatasetProfileSuccess) -> Datas
     )
 
 
-@router.post("/upload-url", response_model=UploadUrlResponse)
+@router.post("/upload-url", response_model=UploadUrlResponse, dependencies=[Depends(enforce_upload_url_rate_limit)])
 async def create_dataset_upload_url(
     payload: UploadUrlRequest,
     current_user: CurrentUser = Depends(get_current_user),

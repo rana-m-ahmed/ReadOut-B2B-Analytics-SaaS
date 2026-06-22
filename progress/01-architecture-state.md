@@ -86,6 +86,7 @@ Update 2026-06-20:
 - `apps/api/app/core/config.py`: implemented.
 - `apps/api/app/core/errors.py`: implemented.
 - `apps/api/app/core/logging.py`: implemented.
+- `apps/api/app/core/rate_limit.py`: implemented in-memory per-user sliding-window throttling for expensive routes behind a swappable store interface. This is separate from `nlq/groq_client.py` reactive provider backoff: `core/rate_limit.py` protects our backend capacity before work is spent, while Groq backoff reacts to upstream 429 behavior after an outbound request is attempted.
 - `apps/api/app/main.py`: implemented app factory, CORS wiring, request logging middleware, typed error handler registration, `/health`, and router registration.
 - `apps/api/app/api/routes_auth.py`: wired stub router.
 - `apps/api/app/api/routes_datasets.py`: implemented authenticated upload-url, profile, list, and schema routes with repository-scoped workspace resolution and Supabase Storage signed-upload/profile artifact flow.

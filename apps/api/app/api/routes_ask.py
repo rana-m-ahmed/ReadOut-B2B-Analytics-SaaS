@@ -13,7 +13,8 @@ from app.analytics.duckdb_engine import execute_dataset_query
 from app.analytics.query_compiler import compile_analytics_intent
 from app.analytics.result_formatter import format_results
 from app.core.config import Settings, get_settings
-from app.core.errors import QueryCompilationError, UpstreamLLMError
+from app.core.errors import NotFoundError, QueryCompilationError, UpstreamLLMError
+from app.core.rate_limit import enforce_ask_rate_limit
 from app.api.routes_datasets import _resolve_current_workspace
 from app.db.models import AskMessageCreate, AskSessionCreate
 from app.db.repositories import AskMessageRepository, AskSessionRepository, DatasetColumnRepository, WorkspaceRepository, DatasetRepository
@@ -61,7 +62,7 @@ class AskResponse(BaseModel):
     session_id: UUID | None = None
 
 
-@router.post("", response_model=AskResponse)
+@router.post("", response_model=AskResponse, dependencies=[Depends(enforce_ask_rate_limit)])
 async def ask_question(
     request: AskRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -82,12 +83,7 @@ async def ask_question(
         dataset_columns = col_repo.list_for_dataset(workspace_id, request.dataset_id)
         
     if not dataset_columns:
-        print(f"DEBUG: demo_ds={demo_ds}, request.dataset_id={request.dataset_id}, workspace_id={workspace_id}")
-        if demo_ds:
-            print(f"DEBUG: demo_ds.workspace_id={demo_ds.workspace_id}, demo_ds.id={demo_ds.id}")
-            ds_get_by_id = dataset_repo.get_by_id(demo_ds.workspace_id, demo_ds.id)
-            print(f"DEBUG: ds_get_by_id={ds_get_by_id}")
-        raise ValueError(f"Dataset not found or has no columns (id={request.dataset_id})")
+        raise NotFoundError("Dataset schema not found")
 
     # 3. Load ask session history
     msg_repo = AskMessageRepository()
