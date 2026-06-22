@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Any
 from uuid import UUID
 
 from app.analytics.duckdb_engine import execute_dataset_query
@@ -153,6 +152,13 @@ def detect_zscore_anomalies(
     for q in queries:
         try:
             res = execute_dataset_query(workspace_id, dataset_id, q["sql"], settings=settings)
+            chart_payload = format_results(
+                res,
+                title=f"{q['metric']} anomaly scan",
+                description=f"Detected {q['type'].replace('_', ' ')} anomalies",
+                settings=settings,
+                override_chart_type="line",
+            ).model_dump()
             
             # Noise is already filtered by the WHERE clause
             top_rows = sorted(res.rows, key=lambda r: abs(r["z"]), reverse=True)
@@ -167,9 +173,9 @@ def detect_zscore_anomalies(
                     actual_value=row["val"],
                     expected_value=row["mean"],
                     severity=row["z"],
-                    chart_payload=None
+                    chart_payload=chart_payload,
                 ))
-        except Exception as e:
+        except Exception:
             pass
             
     # Sort anomalies by absolute severity

@@ -9,7 +9,6 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.analytics.chart_recommender import recommend_chart_type
 from app.analytics.duckdb_engine import execute_dataset_query
 from app.analytics.query_compiler import compile_analytics_intent
 from app.analytics.result_formatter import format_results
@@ -164,7 +163,6 @@ async def ask_question(
     validated_intent = validation_result
     if validated_intent.intent.intent == IntentType.CLARIFICATION_REQUIRED:
         return AskResponse(
-            question=request.question,
             summary="I need more information to answer your question.",
             chart=None,
             query_plan=None,
@@ -191,20 +189,14 @@ async def ask_question(
             settings=settings,
         )
         
-        result_shape = "single_value"
-        if len(result_df.columns) > 1:
-            result_shape = "time_series" if "bucket" in result_df.columns else "grouped"
-            
-        chart_type = validated_intent.intent.chart_hint or recommend_chart_type(result_df)
-        
         chart_payload = format_results(
             result=result_df,
             title="Analysis Result",
             description=request.question,
             settings=settings,
-            override_chart_type=validated_intent.intent.chart_hint
+            override_chart_type=validated_intent.intent.chart_hint,
+            meta={"intent": validated_intent.intent.model_dump()},
         )
-        chart_payload.meta["intent"] = validated_intent.intent.model_dump()
     except QueryCompilationError as e:
         logger.error(f"Query compilation failed: {e}")
         return AskResponse(

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Any
 from uuid import UUID
 
 from sklearn.ensemble import IsolationForest
@@ -39,7 +38,7 @@ def detect_isolation_forest_anomalies(
     if not revenue_col:
         return []
         
-    order_agg = f"count(distinct {order_col.name})" if order_col else f"count(*)"
+    order_agg = f"count(distinct {order_col.name})" if order_col else "count(*)"
     discount_agg = f"avg({discount_col.name})" if discount_col else "0"
     
     sql = f"""
@@ -58,6 +57,13 @@ def detect_isolation_forest_anomalies(
         res = execute_dataset_query(workspace_id, dataset_id, sql, settings=settings)
         if len(res.rows) < 10:
             return [] # Need sufficient history
+        chart_payload = format_results(
+            res,
+            title="Multivariate anomaly scan",
+            description="Daily revenue, order, and discount signals",
+            settings=settings,
+            override_chart_type="line",
+        ).model_dump()
             
         dates = [row["d"] for row in res.rows]
         features = []
@@ -95,10 +101,10 @@ def detect_isolation_forest_anomalies(
                 actual_value=float(X[i][0]), # revenue
                 expected_value=None,
                 severity=float(score),
-                chart_payload=None
+                chart_payload=chart_payload,
             ))
             
-    except Exception as e:
+    except Exception:
         pass
         
     return anomalies

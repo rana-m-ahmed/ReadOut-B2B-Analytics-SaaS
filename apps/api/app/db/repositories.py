@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel
 from supabase import Client
 
+from app.core.config import get_settings
 from app.db.models import (
     Anomaly,
     AnomalyCreate,
@@ -45,11 +47,16 @@ from app.db.supabase_client import get_supabase_client
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
+class JsonPayloadTooLargeError(RuntimeError):
+    """Raised when a JSONB payload bypasses formatter-level cap enforcement."""
+
+
 class _RepositoryBase(Generic[ModelT]):
     """Common helpers for typed repository operations."""
 
     table_name: str
     model_cls: type[ModelT]
+    jsonb_payload_fields: tuple[str, ...] = ()
 
     def __init__(self, client: Client | None = None) -> None:
         self._client = client or get_supabase_client()
@@ -68,8 +75,37 @@ class _RepositoryBase(Generic[ModelT]):
         return [self.model_cls.model_validate(item) for item in payload]
 
     def _insert(self, payload: BaseModel) -> ModelT:
-        response = self._table().insert(payload.model_dump(mode="json", exclude_none=True)).execute()
+        write_payload = self._prepare_write_payload(payload)
+        response = self._table().insert(write_payload).execute()
         return self._parse_many(response.data)[0]
+
+    def _prepare_write_payload(
+        self,
+        payload: BaseModel | dict[str, Any],
+    ) -> dict[str, Any]:
+        write_payload = (
+            payload.model_dump(mode="json", exclude_none=True)
+            if isinstance(payload, BaseModel)
+            else payload
+        )
+        max_bytes = get_settings().MAX_CHART_PAYLOAD_KB * 1024
+        for field_name in self.jsonb_payload_fields:
+            value = write_payload.get(field_name)
+            if value is None:
+                continue
+            serialized = json.dumps(
+                value,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if len(serialized) > max_bytes:
+                size_kb = len(serialized) / 1024
+                raise JsonPayloadTooLargeError(
+                    f"{self.table_name}.{field_name} is {size_kb:.2f} KB; "
+                    f"maximum is {get_settings().MAX_CHART_PAYLOAD_KB} KB. "
+                    "The payload must pass through analytics.result_formatter first."
+                )
+        return write_payload
 
     def _update_by_filters(
         self,
@@ -77,7 +113,7 @@ class _RepositoryBase(Generic[ModelT]):
         *,
         filters: dict[str, UUID | str],
     ) -> ModelT | None:
-        builder = self._table().update(payload.model_dump(mode="json", exclude_none=True))
+        builder = self._table().update(self._prepare_write_payload(payload))
         for field_name, field_value in filters.items():
             builder = builder.eq(field_name, str(field_value))
         response = builder.execute()
@@ -276,6 +312,7 @@ class AskMessageRepository(_RepositoryBase[AskMessage]):
 
     table_name = "ask_messages"
     model_cls = AskMessage
+    jsonb_payload_fields = ("chart_spec",)
 
     def __init__(self, client: Client | None = None) -> None:
         super().__init__(client=client)
@@ -285,7 +322,7 @@ class AskMessageRepository(_RepositoryBase[AskMessage]):
         session = self._sessions.get_by_id(workspace_id, payload.session_id)
         if session is None:
             raise ValueError("session_id is not accessible within the provided workspace_id")
-        response = self._table().insert(payload.model_dump(mode="json", exclude_none=True)).execute()
+        response = self._table().insert(self._prepare_write_payload(payload)).execute()
         return self._parse_many(response.data)[0]
 
     def get_by_id(self, workspace_id: UUID, session_id: UUID, message_id: UUID) -> AskMessage | None:
@@ -364,6 +401,7 @@ class WidgetRepository(_RepositoryBase[Widget]):
 
     table_name = "widgets"
     model_cls = Widget
+    jsonb_payload_fields = ("config",)
 
     def __init__(self, client: Client | None = None) -> None:
         super().__init__(client=client)
@@ -373,7 +411,7 @@ class WidgetRepository(_RepositoryBase[Widget]):
         dashboard = self._dashboards.get_by_id(workspace_id, payload.dashboard_id)
         if dashboard is None:
             raise ValueError("dashboard_id is not accessible within the provided workspace_id")
-        response = self._table().insert(payload.model_dump(mode="json", exclude_none=True)).execute()
+        response = self._table().insert(self._prepare_write_payload(payload)).execute()
         return self._parse_many(response.data)[0]
 
     def get_by_id(self, workspace_id: UUID, dashboard_id: UUID, widget_id: UUID) -> Widget | None:
@@ -444,11 +482,12 @@ class InsightRepository(_RepositoryBase[Insight]):
 
     table_name = "insights"
     model_cls = Insight
+    jsonb_payload_fields = ("metadata",)
 
     def create(self, workspace_id: UUID, payload: InsightCreate) -> Insight:
         create_payload = payload.model_dump(mode="json", exclude_none=True)
         create_payload["workspace_id"] = str(workspace_id)
-        response = self._table().insert(create_payload).execute()
+        response = self._table().insert(self._prepare_write_payload(create_payload)).execute()
         return self._parse_many(response.data)[0]
 
     def get_by_id(self, workspace_id: UUID, insight_id: UUID) -> Insight | None:
@@ -469,11 +508,12 @@ class AnomalyRepository(_RepositoryBase[Anomaly]):
 
     table_name = "anomalies"
     model_cls = Anomaly
+    jsonb_payload_fields = ("anomaly_payload",)
 
     def create(self, workspace_id: UUID, payload: AnomalyCreate) -> Anomaly:
         create_payload = payload.model_dump(mode="json", exclude_none=True)
         create_payload["workspace_id"] = str(workspace_id)
-        response = self._table().insert(create_payload).execute()
+        response = self._table().insert(self._prepare_write_payload(create_payload)).execute()
         return self._parse_many(response.data)[0]
 
     def get_by_id(self, workspace_id: UUID, anomaly_id: UUID) -> Anomaly | None:

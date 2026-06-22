@@ -11,6 +11,9 @@ from app.analytics.chart_recommender import recommend_chart_type
 from app.analytics.duckdb_engine import QueryResult
 from app.core.config import Settings, get_settings
 
+PAYLOAD_BUDGET_RATIO = 0.9
+
+
 class ChartPayload(BaseModel):
     type: str
     title: str
@@ -56,9 +59,13 @@ def format_value(value: Any, name: str, type_: str) -> str:
         
     return str(value)
 
-def _get_payload_size_kb(payload: ChartPayload) -> float:
-    # Use default handler for date/datetime
-    json_str = payload.model_dump_json()
+def chart_payload_size_kb(payload: ChartPayload | dict[str, Any]) -> float:
+    """Return the compact UTF-8 JSON size used by persistence cap checks."""
+
+    if isinstance(payload, ChartPayload):
+        json_str = payload.model_dump_json()
+    else:
+        json_str = ChartPayload.model_validate(payload).model_dump_json()
     return len(json_str.encode("utf-8")) / 1024.0
 
 def _evenly_sample(data: list[dict[str, Any]], target_size: int) -> list[dict[str, Any]]:
@@ -73,7 +80,8 @@ def format_results(
     title: str,
     description: str,
     settings: Settings | None = None,
-    override_chart_type: str | None = None
+    override_chart_type: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> ChartPayload:
     resolved_settings = settings or get_settings()
     chart_type = override_chart_type or recommend_chart_type(result)
@@ -113,22 +121,27 @@ def format_results(
         y_keys=y_keys,
         series=None,
         data=data,
-        meta={"truncated": False, "original_row_count": len(data)}
+        meta={
+            **(meta or {}),
+            "truncated": result.truncated,
+            "original_row_count": len(data),
+        },
     )
-    
-    # Cap enforcement
-    while len(payload.data) > 2 and _get_payload_size_kb(payload) > resolved_settings.MAX_CHART_PAYLOAD_KB:
-        current_size = _get_payload_size_kb(payload)
-        ratio = (resolved_settings.MAX_CHART_PAYLOAD_KB / current_size) * 0.9
-        target_rows = max(2, int(len(payload.data) * ratio))
+
+    # Leave a small margin for JSONB wrappers such as widget source metadata.
+    target_size_kb = resolved_settings.MAX_CHART_PAYLOAD_KB * PAYLOAD_BUDGET_RATIO
+    while payload.data and chart_payload_size_kb(payload) > target_size_kb:
+        current_size = chart_payload_size_kb(payload)
+        ratio = (target_size_kb / current_size) * PAYLOAD_BUDGET_RATIO
+        target_rows = max(0, int(len(payload.data) * ratio))
         if target_rows >= len(payload.data):
             target_rows = len(payload.data) - 1
-            
+
         if chart_type in ("line", "multi_line", "anomaly_line"):
             payload.data = _evenly_sample(data, target_rows)
         else:
             payload.data = data[:target_rows]
-            
+
         payload.meta["truncated"] = True
-        
+
     return payload
