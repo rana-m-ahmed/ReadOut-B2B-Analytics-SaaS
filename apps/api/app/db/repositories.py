@@ -294,6 +294,21 @@ class AskMessageRepository(_RepositoryBase[AskMessage]):
             return None
         return self._select_one(filters={"id": message_id, "session_id": session_id})
 
+    def get_for_workspace(self, workspace_id: UUID, message_id: UUID) -> AskMessage | None:
+        response = (
+            self._table()
+            .select("*, ask_sessions!inner(workspace_id)")
+            .eq("id", str(message_id))
+            .eq("ask_sessions.workspace_id", str(workspace_id))
+            .limit(1)
+            .execute()
+        )
+        payload = (response.data or [None])[0]
+        if payload is None:
+            return None
+        payload.pop("ask_sessions", None)
+        return self.model_cls.model_validate(payload)
+
     def list_for_session(self, workspace_id: UUID, session_id: UUID) -> list[AskMessage]:
         session = self._sessions.get_by_id(workspace_id, session_id)
         if session is None:
@@ -367,6 +382,21 @@ class WidgetRepository(_RepositoryBase[Widget]):
             return None
         return self._select_one(filters={"id": widget_id, "dashboard_id": dashboard_id})
 
+    def get_for_workspace(self, workspace_id: UUID, widget_id: UUID) -> Widget | None:
+        response = (
+            self._table()
+            .select("*, dashboards!inner(workspace_id)")
+            .eq("id", str(widget_id))
+            .eq("dashboards.workspace_id", str(workspace_id))
+            .limit(1)
+            .execute()
+        )
+        payload = (response.data or [None])[0]
+        if payload is None:
+            return None
+        payload.pop("dashboards", None)
+        return self.model_cls.model_validate(payload)
+
     def list_for_dashboard(self, workspace_id: UUID, dashboard_id: UUID) -> list[Widget]:
         dashboard = self._dashboards.get_by_id(workspace_id, dashboard_id)
         if dashboard is None:
@@ -385,11 +415,28 @@ class WidgetRepository(_RepositoryBase[Widget]):
             return None
         return self._update_by_filters(payload, filters={"id": widget_id, "dashboard_id": dashboard_id})
 
+    def update_for_workspace(
+        self,
+        workspace_id: UUID,
+        widget_id: UUID,
+        payload: WidgetUpdate,
+    ) -> Widget | None:
+        widget = self.get_for_workspace(workspace_id, widget_id)
+        if widget is None:
+            return None
+        return self.update(workspace_id, widget.dashboard_id, widget_id, payload)
+
     def delete(self, workspace_id: UUID, dashboard_id: UUID, widget_id: UUID) -> bool:
         dashboard = self._dashboards.get_by_id(workspace_id, dashboard_id)
         if dashboard is None:
             return False
         return self._delete_by_filters(filters={"id": widget_id, "dashboard_id": dashboard_id})
+
+    def delete_for_workspace(self, workspace_id: UUID, widget_id: UUID) -> bool:
+        widget = self.get_for_workspace(workspace_id, widget_id)
+        if widget is None:
+            return False
+        return self.delete(workspace_id, widget.dashboard_id, widget_id)
 
 
 class InsightRepository(_RepositoryBase[Insight]):

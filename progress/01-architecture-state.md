@@ -158,3 +158,4 @@ Update 2026-06-20:
 - `apps/api/app/anomalies/zscore_detector.py`: implemented interpretable univariate anomaly detection.
 - `apps/api/app/anomalies/isolation_forest_detector.py`: implemented scikit-learn multivariate anomaly detection.
 - `apps/api/app/anomalies/anomaly_explainer.py`: implemented anomaly explanation generation with amber-never-red tone checks.
+- `apps/api/app/api/routes_widgets.py`: implemented authenticated widget pinning from persisted ask/insight/anomaly payloads, workspace-scoped list/update/delete operations, and persisted dashboard drag-reorder layout updates.

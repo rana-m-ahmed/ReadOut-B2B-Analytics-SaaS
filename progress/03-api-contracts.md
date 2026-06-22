@@ -65,6 +65,61 @@
   - "what caused that?" / "why did": creates an `anomaly_explanation` / `grouped_metric` candidate intent grouping by the first available dimension/category column to produce a ranked breakdown.
   If the follow-up doesn't match any pattern, it is treated as a "fresh" question and sent to the LLM directly.
 
+- Method: `POST`
+  Path: `/widgets`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape:
+  `{"dashboard_id":"<uuid>","source_type":"ask_message|insight|anomaly","source_id":"<uuid>","title":"<optional override>","position":<optional non-negative int>}`
+  Response shape:
+  `201 Created` with `{"id":"<uuid>","dashboard_id":"<uuid>","dataset_id":"<uuid|null>","title":"<string>","widget_type":"metric|table|bar|line|pie|area|scatter","query_text":"<sql|null>","config":{"chart_payload":{...},"query_plan":{...}|null,"source":{"type":"<source_type>","id":"<uuid>"}},"position":<int>,"created_at":"<iso8601>","updated_at":"<iso8601>"}`
+  Notes:
+  the source must belong to the current workspace. For an `ask_message`, only an assistant message can be pinned. `chart_payload` and `query_plan` are copied from the persisted source without regeneration or reformatting; ask-message query plans are read from `chart_spec.meta.intent`. If `position` is omitted it is appended after the dashboard's current widgets.
+  Error shape:
+  typed `404 not_found` for an inaccessible dashboard/source and typed `400 validation_error` when the source has no reusable chart payload or has an unsupported chart type.
+
+- Method: `GET`
+  Path: `/dashboards/{dashboard_id}/widgets`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape:
+  `200 OK` with a position-sorted list of the widget response shape documented for `POST /widgets`.
+  Error shape:
+  typed `404 not_found` when the dashboard is outside the current workspace.
+
+- Method: `PATCH`
+  Path: `/widgets/{widget_id}`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape:
+  `{"title":"<optional non-empty string>","position":<optional non-negative int>}` with at least one field required.
+  Response shape:
+  `200 OK` with the updated widget response.
+  Notes:
+  stored `chart_payload`, `query_plan`, and source identity are immutable through this endpoint.
+  Error shape:
+  typed `404 not_found` when the widget is outside the current workspace.
+
+- Method: `DELETE`
+  Path: `/widgets/{widget_id}`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape: `204 No Content`.
+  Notes:
+  deletion also removes the widget's entry from the persisted dashboard layout.
+  Error shape:
+  typed `404 not_found` when the widget is outside the current workspace.
+
+- Method: `PATCH`
+  Path: `/dashboards/{dashboard_id}/layout`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape:
+  `{"widgets":[{"widget_id":"<uuid>","position":<non-negative int>}, ...]}`
+  Response shape:
+  `200 OK` with `{"dashboard_id":"<uuid>","layout":[{"widget_id":"<uuid>","position":<int>}, ...]}`
+  Notes:
+  widget IDs and positions must be unique, every referenced widget must belong to the target dashboard/current workspace, and both each widget's `position` and `dashboards.layout` are persisted.
+  Error shape:
+  typed `404 not_found` for an inaccessible dashboard or foreign widget reference; malformed duplicate layouts fail request validation.
+
 - Internal contract: `groq_client` -> `intent_validator`
   Name: analytics intent JSON schema.
   Purpose:
