@@ -21,3 +21,8 @@
   - **Issue found**: the live Supabase project still allowed an anonymous user to read their own expired workspace and child dataset until cleanup ran. This violated the intended guarantee that expiry immediately revokes access.
   - **Resolution in repo**: added `apps/api/migrations/0005_anon_expiry_rls.sql` so `owns_workspace()` denies expired anonymous workspaces and `workspaces.workspace_owner_access` enforces the same `expires_at > now()` rule directly on workspace rows.
   - **Verification**: the new live test `apps/api/tests/integration/test_anon_workspace_expiry.py` fails against the current live project before `0005` is applied, proving the gap was real. After the migration is applied to the live database, this test should pass and the issue can be considered fully closed in deployment as well as in code.
+
+- **Resolved 2026-06-22: `/ask` trusted monkeypatched/raw LLM payloads too much**
+  - **Issue found**: the new adversarial suite showed that `/ask` assumed `get_intent()` always returned an already-valid typed `AnalyticsIntent`. A malformed dict from a patched or future-regressed LLM boundary could therefore crash before reaching validator/compiler safety checks.
+  - **Resolution**: `routes_ask.py` now re-validates any returned payload through `analytics_intent_adapter.validate_python()` and degrades malformed payloads into a clean `clarification_required` response. Nonexistent-column payloads still flow into `intent_validator`, which rejects them before DuckDB execution.
+  - **Verification**: `apps/api/tests/integration/test_adversarial.py` now passes its malformed-payload, prompt-injection, cross-workspace dataset, and SQL-adversarial cases end to end.

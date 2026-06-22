@@ -7,7 +7,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError as PydanticValidationError
 
 from app.analytics.duckdb_engine import execute_dataset_query
 from app.analytics.query_compiler import compile_analytics_intent
@@ -19,12 +19,34 @@ from app.api.routes_datasets import _resolve_current_workspace
 from app.db.models import AskMessageCreate, AskSessionCreate
 from app.db.repositories import AskMessageRepository, AskSessionRepository, DatasetColumnRepository, WorkspaceRepository, DatasetRepository
 from app.nlq.groq_client import generate_summary, get_intent
-from app.nlq.schemas import IntentType
+from app.nlq.schemas import AnalyticsIntent, IntentType, analytics_intent_adapter
 from app.nlq.intent_validator import IntentValidationRejected, validate_analytics_intent
 from app.security.auth_guard import CurrentUser, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ask", tags=["ask"])
+
+
+def _clarification_response(message: str, session_id: UUID | None) -> AskResponse:
+    return AskResponse(
+        clarification_required=ClarificationRejection(
+            code="clarification_required",
+            message=message,
+        ),
+        suggested_followups=["Can you rephrase your question?"],
+        session_id=session_id,
+    )
+
+
+def _normalize_llm_intent(raw_intent: object, session_id: UUID | None) -> AnalyticsIntent | AskResponse:
+    try:
+        return analytics_intent_adapter.validate_python(raw_intent)
+    except PydanticValidationError as exc:
+        logger.warning("Rejected malformed analytics intent payload: %s", exc)
+        return _clarification_response(
+            "I couldn't interpret that request safely. Please try rephrasing it.",
+            session_id,
+        )
 
 
 class AskRequest(BaseModel):
@@ -130,6 +152,11 @@ async def ask_question(
         return AskResponse(
             summary="I'm having trouble connecting to my analysis engine right now. Please try again in a moment.",
         )
+
+    normalized_intent = _normalize_llm_intent(raw_intent, request.session_id)
+    if isinstance(normalized_intent, AskResponse):
+        return normalized_intent
+    raw_intent = normalized_intent
 
     # 5. Validate Intent
     # intent_validator expects a slightly different shape for DatasetIntentColumn
