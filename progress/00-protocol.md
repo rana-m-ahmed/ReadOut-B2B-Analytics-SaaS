@@ -9,3 +9,8 @@
 4. Never delete history from these files — append, or mark old entries superseded.
 5. Keep entries short and factual. This is a machine-readable project memory, not
    a narrative.
+
+6. frontend prompts read/write the four new files above in addition to the original
+   backend files; progress/03-api-contracts.md is the frontend's single source of truth
+   for request/response shapes; any conflict between this prompt series and that file
+   must be logged in 02-decisions-log.md before proceeding, with the file winning.

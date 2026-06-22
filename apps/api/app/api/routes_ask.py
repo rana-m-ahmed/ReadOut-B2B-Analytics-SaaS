@@ -103,6 +103,7 @@ class AskResponse(BaseModel):
     suggested_followups: list[str] = Field(default_factory=list)
     clarification_required: ClarificationRejection | None = None
     session_id: UUID | None = None
+    debug_sql: str | None = None
 
 
 @router.post("", response_model=AskResponse, dependencies=[Depends(enforce_ask_rate_limit)])
@@ -325,4 +326,5 @@ async def ask_question(
         confidence="high",
         suggested_followups=suggested_followups,
         session_id=request.session_id,
+        debug_sql=query,
     )

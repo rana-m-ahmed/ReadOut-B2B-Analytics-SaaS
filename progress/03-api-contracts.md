@@ -120,6 +120,44 @@
   Error shape:
   typed `404 not_found` for an inaccessible dashboard or foreign widget reference; malformed duplicate layouts fail request validation.
 
+- Method: `GET`
+  Path: `/datasets/{dataset_id}/insights`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape:
+  `200 OK` with
+  `[{"id": "<uuid>", "dataset_id": "<uuid>", "title": "<string>", "body": "<string>", "insight_type": "<string>", "severity": "<string>", "score": <float>, "metadata": <dict>, "created_at": "<iso8601>"}]`
+
+- Method: `POST`
+  Path: `/datasets/{dataset_id}/insights/generate`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape:
+  `200 OK` with a list of the newly generated insights using the same shape as `GET /datasets/{dataset_id}/insights`.
+
+- Method: `GET`
+  Path: `/datasets/{dataset_id}/anomalies`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape:
+  `200 OK` with
+  `[{"id": "<uuid>", "dataset_id": "<uuid>", "detector_type": "<string>", "metric_name": "<string>", "severity": "<string>", "explanation": "<string>", "anomaly_payload": <dict>, "created_at": "<iso8601>"}]`
+
+- Method: `POST`
+  Path: `/datasets/{dataset_id}/anomalies/scan`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape:
+  `200 OK` with a list of the newly detected anomalies using the same shape as `GET /datasets/{dataset_id}/anomalies`.
+
+- Method: `DELETE`
+  Path: `/anomalies/{anomaly_id}`
+  Auth: `Authorization: Bearer <jwt>` required via `auth_guard`.
+  Request shape: no body.
+  Response shape: `204 No Content`.
+  Error shape:
+  typed `404 not_found` when the anomaly is outside the current workspace.
+
 - Internal contract: `groq_client` -> `intent_validator`
   Name: analytics intent JSON schema.
   Purpose:

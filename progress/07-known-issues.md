@@ -1,6 +1,8 @@
 # Known Issues
 
-- **Phase 7 (Anomalies): Detector Threshold Tuning**
+- **Phase 7 (Anomalies):### 11.2 Design Verification
+1.  **Metric alignment:** The `--font-sans` numbers vs tabulated numeric presentation across multiple metric cards should be verified once real dataset digits replace the `10,000` stubs.
+2.  **Marketing Asset Placeholder:** The "canned demo sequence" asset on the marketing page is currently implemented entirely via CSS/HTML/Framer Motion. If a pixel-perfect recorded GIF/Video asset is provided later, it can replace the `<HeroDemoSequence />` component.
   - **Issue**: Standard deviation across rolling windows for revenue by category/region can occasionally become incredibly small (approaching zero variance). When this happens, even a normal daily fluctuation produces an astronomically high Z-Score (e.g., $Z > 200$), which drowns out genuine macro anomalies like the seeded 45% drop.
   - **Resolution/Tuning**: Added explicit noise-filtering clauses to the DuckDB Z-Score queries: `std > 0.05 * mean AND abs(val - mean) > 0.2 * mean`. This enforces that a point is only flagged if the absolute deviation from the rolling mean is at least 20%, explicitly discarding microscopic noise and correctly surfacing the seeded April 2025 anomaly to the top of the pile.
   - **Performance Optimization**: Generating a separate DuckDB chart query for every anomaly caused the suite to hang. Resolved by formatting one already-fetched result per detector query and sharing that capped chart payload across its anomaly records.
@@ -33,3 +35,7 @@
   - **Q24: "Show revenue and orders together."**
   - **Why it still misses**: the current contract is single-metric by design. A faithful answer needs a multi-metric intent plus chart/formatter support for paired series, not a disguised one-metric fallback that only mentions one side of the request.
   - **Status**: acceptable for this phase because the live golden suite now exceeds the pass bar at `23/25`, and both misses are traceable contract gaps rather than random reliability failures.
+
+- **Phase 8 (Primitives): Full Visual QA Required**
+  - **Issue**: RTL tests verify that token CSS variables (e.g., `var(--shadow-float)`, `var(--surface)`) are applied to the generated DOM elements, but cannot guarantee the actual visual rendering output in the browser (e.g., how the Framer Motion scale-back effect interacts with z-index in practice).
+  - **Status**: Full visual QA for these primitives is a manual step at this phase's validation gate, not something CI can verify.

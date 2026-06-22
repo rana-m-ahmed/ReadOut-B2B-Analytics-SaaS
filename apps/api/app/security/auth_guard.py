@@ -75,24 +75,30 @@ def ensure_workspace(
     *,
     now_factory: Callable[[], datetime] | None = None,
 ) -> CurrentUser:
-    """Ensure anonymous users have a single TTL workspace and demo dataset reference."""
-
-    if not current_user.is_anonymous:
-        return current_user
+    """Ensure all users have a workspace and demo dataset reference."""
 
     now_factory = now_factory or (lambda: datetime.now(timezone.utc))
     workspaces = workspace_repository.list_for_owner(current_user.user_id)
     workspace = workspaces[0] if workspaces else None
 
     if workspace is None:
-        created_workspace = workspace_repository.create(
-            current_user.user_id,
-            WorkspaceCreate(
+        if current_user.is_anonymous:
+            workspace_create = WorkspaceCreate(
                 name="Anonymous Workspace",
                 slug=f"anon-{current_user.user_id.hex[:12]}",
                 is_anonymous=True,
                 expires_at=now_factory() + timedelta(hours=ttl_hours),
-            ),
+            )
+        else:
+            workspace_create = WorkspaceCreate(
+                name="Default Workspace",
+                slug=f"ws-{current_user.user_id.hex[:12]}",
+                is_anonymous=False,
+            )
+            
+        created_workspace = workspace_repository.create(
+            current_user.user_id,
+            workspace_create,
         )
         current_user.workspace_id = created_workspace.id
     else:

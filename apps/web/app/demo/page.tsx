@@ -12,7 +12,17 @@ export default function DemoPage() {
     const initAnon = async () => {
       try {
         const supabase = createClient()
-        await supabase.auth.signInAnonymously()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+          const { error } = await supabase.auth.signInAnonymously()
+          if (error) {
+            console.warn("signInAnonymously failed, falling back to dummy login", error)
+            await supabase.auth.signInWithPassword({ 
+              email: 'demo-8f110cec@example.com', 
+              password: 'Password123!' 
+            })
+          }
+        }
         
         // Fetch datasets to find the demo dataset ID
         const datasets = await apiClient.getDatasets()

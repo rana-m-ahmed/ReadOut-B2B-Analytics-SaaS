@@ -7,7 +7,7 @@ import json
 from typing import Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -250,6 +250,11 @@ async def list_datasets(
     dataset_repository = DatasetRepository()
     workspace = _resolve_current_workspace(current_user, workspace_repository)
     datasets = dataset_repository.list_for_workspace(workspace.id)
+    
+    if current_user.demo_dataset_id:
+        demo = dataset_repository.get(current_user.demo_dataset_id)
+        if demo and not any(d.id == demo.id for d in datasets):
+            datasets.append(demo)
     return [
         DatasetListItem(
             id=dataset.id,
@@ -308,3 +313,46 @@ async def get_dataset_schema(
             for column in columns
         ],
     )
+
+@router.get("/{dataset_id}/profile", response_model=DatasetProfileResponse)
+async def get_dataset_profile(
+    dataset_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> DatasetProfileResponse:
+    workspace_repository = WorkspaceRepository()
+    dataset_repository = DatasetRepository()
+    storage_service = DatasetStorageService()
+
+    workspace, dataset = _get_dataset_for_current_workspace(
+        dataset_id,
+        current_user,
+        workspace_repository,
+        dataset_repository,
+    )
+    
+    try:
+        profile_bytes = storage_service.download_bytes(storage_service.build_paths(dataset.created_by, dataset.id).profile_json)
+        profile_payload = json.loads(profile_bytes.decode("utf-8"))
+        # Add dataset_id back if it's not in the JSON (profiler might not include it at the root)
+        profile_payload["dataset_id"] = dataset.id
+        return DatasetProfileResponse(**profile_payload)
+    except Exception as exc:
+        raise NotFoundError("Dataset profile not found in storage") from exc
+
+@router.delete("/{dataset_id}")
+async def delete_dataset(
+    dataset_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    workspace_repository = WorkspaceRepository()
+    dataset_repository = DatasetRepository()
+    
+    workspace, dataset = _get_dataset_for_current_workspace(
+        dataset_id,
+        current_user,
+        workspace_repository,
+        dataset_repository,
+    )
+    
+    dataset_repository.delete(workspace.id, dataset.id)
+    return Response(status_code=204)
