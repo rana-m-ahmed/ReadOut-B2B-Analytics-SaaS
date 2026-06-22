@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #F7F9FA;
+  --surface: #FFFFFF;
+  --surface-subtle: #EEF1F2;
+  --ink: #111827;
+  --ink-secondary: #5B6472;
+  --accent: #2A2FED;
+  --accent-on: #FFFFFF;
+  --warning: #F2A93B;
+  --success: #1E9E6E;
+  --danger: #D64B3F;
+  --hairline: #E3E8E6;
+
+  --radius-control: 12px;
+  --radius-card: 20px;
+  --radius-modal: 24px;
+  --radius-pill: 999px;
+
+  --shadow-float: 0 4px 12px rgba(17, 24, 39, 0.08);
+  --shadow-lift: 0 12px 24px rgba(17, 24, 39, 0.12);
+  --shadow-dock: 0 -4px 16px rgba(17, 24, 39, 0.08);
+}
+
+body {
+  background-color: var(--canvas);
+  color: var(--ink);
+  font-family: 'Geist', 'Inter Tight', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
