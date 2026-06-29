@@ -1,31 +1,36 @@
-@import "tailwindcss";
+@theme {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-ink: var(--ink);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-accent: var(--accent);
+  --color-accent-on: var(--accent-on);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-hairline: var(--hairline);
 
-:root {
-  --canvas: #F7F9FA;
-  --surface: #FFFFFF;
-  --surface-subtle: #EEF1F2;
-  --ink: #111827;
-  --ink-secondary: #5B6472;
-  --accent: #2A2FED;
-  --accent-on: #FFFFFF;
-  --warning: #F2A93B;
-  --success: #1E9E6E;
-  --danger: #D64B3F;
-  --hairline: #E3E8E6;
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-modal: var(--radius-modal);
+  --radius-pill: var(--radius-pill);
 
-  --radius-control: 12px;
-  --radius-card: 20px;
-  --radius-modal: 24px;
-  --radius-pill: 999px;
-
-  --shadow-float: 0 4px 12px rgba(17, 24, 39, 0.08);
-  --shadow-lift: 0 12px 24px rgba(17, 24, 39, 0.12);
-  --shadow-dock: 0 -4px 16px rgba(17, 24, 39, 0.08);
+  --shadow-float: var(--shadow-float);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-dock: var(--shadow-dock);
 }
 
-body {
-  background-color: var(--canvas);
-  color: var(--ink);
-  font-family: 'Geist', 'Inter Tight', system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
+:root {
+  --canvas:#071022; --surface:rgba(16,27,54,.82); --surface-subtle:rgba(31,48,84,.68); --ink:#F4F7FF;
+  --ink-secondary:#9EABC5; --accent:#6C7CFF; --accent-on:#FFFFFF; --warning:#FFB85C;
+  --success:#46D6A0; --danger:#FF6B74; --hairline:rgba(174,194,235,.14);
+  --radius-control:14px; --radius-card:24px; --radius-modal:28px; --radius-pill:999px;
+  --shadow-float:0 16px 44px rgba(0,0,0,.22); --shadow-lift:0 28px 70px rgba(0,0,0,.35);
+  --shadow-dock:0 24px 64px rgba(0,0,0,.38);
+  --marketing-ink:#090B13; --marketing-ink-soft:#111521; --marketing-paper:#F1F0E8;
+  --marketing-paper-deep:#E8E7DD; --marketing-violet:#6046E8; --marketing-mint:#A8FF78;
+  --marketing-cyan:#6DE5EE; --marketing-amber:#FFCC66; --marketing-coral:#FF7A66;
+  --marketing-rule:rgba(9,11,19,.16); --marketing-ink-muted:rgba(9,11,19,.62);
+  --marketing-ink-faint:rgba(9,11,19,.68);
 }

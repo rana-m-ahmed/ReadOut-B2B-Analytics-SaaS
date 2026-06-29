@@ -1,18 +1,1 @@
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import path from 'path'
-
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './')
-    }
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    globals: true,
-    exclude: ['**/node_modules/**', '**/dist/**', '**/tests/e2e/**'],
-  },
-})
+import{defineConfig}from"vitest/config";import react from"@vitejs/plugin-react";import path from"node:path";export default defineConfig({plugins:[react()],resolve:{alias:{"@":path.resolve(__dirname,".")}},test:{environment:"jsdom",setupFiles:["./tests/setup.ts"],exclude:["**/node_modules/**","**/tests/e2e/**"]}});

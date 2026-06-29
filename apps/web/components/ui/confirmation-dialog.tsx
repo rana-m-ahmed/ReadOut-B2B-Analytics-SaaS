@@ -1,0 +1,2 @@
+"use client"; import {Modal}from"./modal"; import{Button}from"./button";
+export function ConfirmationDialog({open,onOpenChange,title,description,onConfirm}:{open:boolean;onOpenChange:(v:boolean)=>void;title:string;description:string;onConfirm:()=>void}){return <Modal open={open} onOpenChange={onOpenChange} title={title}><p className="text-[var(--ink-secondary)]">{description}</p><div className="mt-6 flex justify-end gap-3"><Button variant="ghost" onClick={()=>onOpenChange(false)}>Cancel</Button><Button variant="danger" onClick={onConfirm}>Confirm</Button></div></Modal>}

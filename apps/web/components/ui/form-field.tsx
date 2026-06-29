@@ -1,0 +1,2 @@
+import type { ReactNode } from "react";
+export function FormField({label,error,children,hint}:{label:string;error?:string;children:ReactNode;hint?:string}){return <label className="grid gap-2 text-sm font-medium"><span>{label}</span>{children}{error?<span role="alert" className="text-sm text-[var(--danger)]">{error}</span>:hint?<span className="text-xs text-[var(--ink-secondary)]">{hint}</span>:null}</label>}

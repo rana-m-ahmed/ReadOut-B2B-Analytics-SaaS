@@ -1,0 +1,1 @@
+import{describe,expect,it}from"vitest";import{queryKeys}from"@/lib/api/queryKeys";describe("query keys",()=>{it("are stable",()=>expect(queryKeys.datasets.schema("abc")).toEqual(["datasets","schema","abc"]))});

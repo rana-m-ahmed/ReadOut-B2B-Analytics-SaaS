@@ -1,0 +1,1 @@
+"use client";import{ErrorState}from"@/components/ui/states";export default function ErrorPage({error,reset}:{error:Error;reset:()=>void}){return <main className="mx-auto max-w-2xl p-10"><ErrorState message={error.message||"This view could not be loaded."} retry={reset}/></main>}

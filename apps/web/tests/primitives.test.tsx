@@ -1,68 +1,50 @@
-import { render, screen, cleanup } from "@testing-library/react"
-import { describe, it, expect, afterEach } from "vitest"
-import { Card } from "@/components/ui/card"
-import { Metric, LabelText } from "@/components/ui/typography"
-import { ModalWrapper } from "@/components/ui/modal-wrapper"
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { Metric } from "@/components/ui/typography";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Drawer } from "@/components/ui/drawer";
 
-describe("Design System Primitives", () => {
-  afterEach(() => {
-    cleanup()
-    document.body.style.transform = ""
-  })
+function DrawerHarness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>Open details</button>
+      <Drawer open={open} onOpenChange={setOpen} title="Accessible details">
+        <button>Drawer action</button>
+      </Drawer>
+    </>
+  );
+}
 
-  it("Card applies --shadow-float and correct background token", () => {
-    render(<Card data-testid="card">Card Content</Card>)
-    const card = screen.getByTestId("card")
-    expect(card.className).toContain("shadow-[var(--shadow-float)]")
-    expect(card.className).toContain("bg-[var(--surface)]")
-  })
+describe("reskinned primitives", () => {
+  it("renders tabular metrics", () => {
+    render(<Metric>12,450</Metric>);
+    expect(screen.getByText("12,450")).toHaveClass("tabular");
+  });
 
-  it("Button applies primary accent token classes by default", () => {
-    render(<Button data-testid="button">Click Me</Button>)
-    const button = screen.getByTestId("button")
-    expect(button.className).toContain("bg-[var(--accent)]")
-    expect(button.className).toContain("text-[var(--accent-on)]")
-  })
+  it("uses Readout tokens", () => {
+    const { container } = render(
+      <>
+        <Button>Go</Button>
+        <Card>Data</Card>
+      </>,
+    );
+    expect(container.innerHTML).toContain("var(--accent)");
+    expect(container.innerHTML).toContain("var(--radius-card)");
+  });
 
-  it("Metric renders with tabular-nums and correct typographic tokens", () => {
-    render(<Metric data-testid="metric">1,234</Metric>)
-    const metric = screen.getByTestId("metric")
-    expect(metric.className).toContain("tabular-nums")
-    expect(metric.className).toContain("text-[var(--ink)]")
-    expect(metric.className).toContain("tracking-[-0.02em]")
-  })
+  it("labels drawers, focuses their close control, and restores trigger focus", async () => {
+    render(<DrawerHarness />);
+    const trigger = screen.getByRole("button", { name: "Open details" });
+    trigger.focus();
+    fireEvent.click(trigger);
 
-  it("LabelText renders with tabular-nums, uppercase, and ink-secondary", () => {
-    render(<LabelText data-testid="label">Revenue</LabelText>)
-    const label = screen.getByTestId("label")
-    expect(label.className).toContain("tabular-nums")
-    expect(label.className).toContain("uppercase")
-    expect(label.className).toContain("text-[var(--ink-secondary)]")
-  })
+    expect(screen.getByRole("dialog", { name: "Accessible details" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Close" })).toHaveFocus());
 
-  it("ModalWrapper mount triggers backdrop-blur and canvas scale", () => {
-    const { rerender } = render(
-      <ModalWrapper isOpen={false} onClose={() => {}}>
-        <div>Modal Content</div>
-      </ModalWrapper>
-    )
-
-    // Should not scale initially
-    expect(document.body.style.transform).toBe("")
-
-    // Open modal
-    rerender(
-      <ModalWrapper isOpen={true} onClose={() => {}}>
-        <div>Modal Content</div>
-      </ModalWrapper>
-    )
-
-    // Should scale back the canvas
-    expect(document.body.style.transform).toBe("scale(0.98)")
-    
-    // Check for backdrop blur on the overlay
-    const backdrop = screen.getByTestId("modal-backdrop")
-    expect(backdrop.className).toContain("backdrop-blur-[8px]")
-  })
-})
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+});

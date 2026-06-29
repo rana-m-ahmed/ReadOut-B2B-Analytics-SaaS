@@ -1,65 +1,39 @@
 "use client";
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useAppStore } from '../../lib/store/useAppStore';
-import { LayoutDashboard, MessageSquare, BarChart2, Activity, Database, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import clsx from 'clsx';
 
-const navItems = [
-  { name: 'Overview', href: '/overview', icon: LayoutDashboard },
-  { name: 'Ask', href: '/ask', icon: MessageSquare },
-  { name: 'Insights', href: '/insights', icon: BarChart2 },
-  { name: 'Anomalies', href: '/anomalies', icon: Activity },
-  { name: 'Data Sources', href: '/data-sources', icon: Database },
-  { name: 'Settings', href: '/settings', icon: Settings },
-];
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { ChevronsLeft, ChevronsRight, Sparkles } from "lucide-react";
+import { navItems } from "./nav-items";
+import { useAppStore } from "@/stores/app-store";
+import { ReadoutLogo } from "@/components/brand/readout-logo";
+import { cn } from "@/lib/utils";
 
 export function Sidebar() {
-  const pathname = usePathname();
-  const { sidebarCollapsed, toggleSidebar } = useAppStore();
-
+  const path = usePathname();
+  const collapsed = useAppStore((state) => state.sidebarCollapsed);
+  const toggle = useAppStore((state) => state.toggleSidebar);
   return (
-    <aside
-      data-testid="sidebar"
-      className={clsx(
-        "hidden md:flex flex-col transition-all duration-300 ease-in-out bg-[var(--surface)] shrink-0 z-40",
-        "m-4 rounded-[var(--radius-card)] shadow-[var(--shadow-dock)]",
-        sidebarCollapsed ? "w-20" : "w-64"
-      )}
-    >
-      <div className="flex h-16 items-center justify-between px-4 shrink-0">
-        {!sidebarCollapsed && <span className="font-bold text-lg text-[var(--ink)]">ReadOut</span>}
-        <button 
-          onClick={toggleSidebar} 
-          data-testid="sidebar-toggle"
-          className="p-2 text-[var(--ink-secondary)] hover:text-[var(--ink)] hover:bg-[var(--surface-subtle)] rounded-[var(--radius-control)] ml-auto"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-        </button>
+    <aside className={cn("dashboard-sidebar fixed bottom-4 left-4 top-4 z-30 hidden md:flex md:flex-col", collapsed ? "w-[72px]" : "w-[224px]")}>
+      <div className={cn("flex h-16 items-center", collapsed ? "justify-center" : "px-3")}>
+        <ReadoutLogo href="/dashboard/overview" compact={collapsed} />
       </div>
-
-      <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = pathname?.startsWith(item.href);
+      <div className="mx-2 h-px bg-white/[.07]"/>
+      <nav aria-label="Dashboard navigation" className="mt-5 grid gap-1.5 px-2">
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const active = path === href;
           return (
-            <Link
-              key={item.name}
-              href={item.href}
-              title={sidebarCollapsed ? item.name : undefined}
-              className={clsx(
-                "flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-control)] transition-colors",
-                isActive 
-                  ? "bg-[var(--accent)]/10 text-[var(--accent)] font-medium" 
-                  : "text-[var(--ink-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--ink)]"
-              )}
-            >
-              <item.icon size={20} className={clsx("shrink-0", isActive ? "text-[var(--accent)]" : "text-[var(--ink-secondary)]")} />
-              {!sidebarCollapsed && <span>{item.name}</span>}
+            <Link key={href} href={href} title={collapsed ? label : undefined} aria-current={active ? "page" : undefined} className={cn("dashboard-nav-item group", active && "is-active", collapsed && "justify-center px-0")}>
+              <span className="dashboard-nav-icon"><Icon size={17}/></span>
+              {!collapsed && <span>{label}</span>}
+              {!collapsed && active && <span className="ml-auto size-1.5 rounded-full bg-[var(--marketing-mint)] shadow-[0_0_10px_var(--marketing-mint)]"/>}
             </Link>
           );
         })}
       </nav>
+      {!collapsed && <div className="mx-2 mt-auto rounded-2xl border border-white/[.07] bg-white/[.035] p-3"><span className="flex size-7 items-center justify-center rounded-full bg-[rgba(168,255,120,.1)] text-[var(--marketing-mint)]"><Sparkles size={13}/></span><p className="mt-3 text-[11px] font-semibold text-white/70">Signal room ready</p><p className="mt-1 text-[9px] leading-4 text-white/70">Ask, scan, and pin decisions from one workspace.</p></div>}
+      <button onClick={toggle} className={cn("dashboard-nav-item mx-2 mt-2 mb-1", collapsed && "justify-center px-0")} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+        {collapsed ? <ChevronsRight size={17}/> : <><ChevronsLeft size={17}/><span>Collapse</span></>}
+      </button>
     </aside>
   );
 }

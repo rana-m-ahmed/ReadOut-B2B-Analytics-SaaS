@@ -1,0 +1,1 @@
+import{AuthShell}from"@/components/auth/auth-shell";import{ResetForm}from"@/components/auth/reset-form";export default function Reset(){return <AuthShell eyebrow="Secure reset" title="Choose a new password" description="Use a strong password you haven’t used for this account before."><ResetForm/></AuthShell>}
