@@ -1,180 +1,182 @@
-import { createClient } from "../supabase/client"
-import { ApiErrorSchema } from "./types"
-
+import { z, type ZodType } from "zod";
+import { createClient } from "@/lib/supabase/client";
+import * as S from "./types";
 export class ApiError extends Error {
-  code: string
-
-  constructor(message: string, code: string) {
-    super(message)
-    this.name = "ApiError"
-    this.code = code
+  constructor(
+    message: string,
+    public code: string,
+    public status: number,
+    public cause?: unknown,
+  ) {
+    super(message);
+    this.name = "ApiError";
   }
 }
-
-export interface AskResponse {
-  answer_id: string;
-  session_id: string;
-  summary: string;
-  chart: any | null; 
-  query_plan: any | null; 
-  confidence: "high" | "medium" | "low";
-  suggested_followups: string[];
-  clarification_required: { code: string; message: string } | null;
-  debug_sql?: string | null;
-}
-
-export interface UploadUrlResponse {
-  dataset_id: string;
-  upload_url: string;
-  storage_path: string;
-}
-
-export interface DatasetColumn {
-  name: string;
-  display_name: string;
-  data_type: "string" | "number" | "boolean" | "date" | "category";
-  semantic_role: "time" | "metric" | "dimension" | "identifier" | null;
-  missing_percent: number;
-  unique_count?: number;
-  sample_values?: any[];
-  min_value?: any | null;
-  max_value?: any | null;
-}
-
-export interface ProfileResponse {
-  dataset_id: string;
-  row_count: number;
-  quality_score: number;
-  warnings: string[];
-  columns: DatasetColumn[];
-}
-
-export interface DatasetListItem {
-  id: string;
-  name: string;
-  description: string | null;
-  source_type: string;
-  storage_bucket: string;
-  storage_path: string;
-  file_size_bytes: number;
-  row_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-async function getAuthHeader(): Promise<HeadersInit> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (session?.access_token) {
-    return {
-      "Authorization": `Bearer ${session.access_token}`
-    }
-  }
-  return {}
-}
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
-
+const DEFAULT_API_BASE_URL = "https://rana-m-ahmed-readout.hf.space";
+const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+let coldStart: ((active: boolean) => void) | undefined;
+export const onColdStart = (listener: (active: boolean) => void) => {
+  coldStart = listener;
+  return () => {
+    coldStart = undefined;
+  };
+};
+const pause = () => new Promise((r) => setTimeout(r, 1200));
 export async function apiFetch<T>(
   path: string,
+  schema: ZodType<T>,
   options: RequestInit = {},
-  isRetry = false
+  attempt = 0,
 ): Promise<T> {
-  const url = `${BASE_URL}${path}`
-  const authHeader = await getAuthHeader()
-
-  const headers = {
-    ...authHeader,
-    ...options.headers,
-  }
-
-  if (options.body && typeof options.body === 'string' && !('Content-Type' in headers)) {
-    // @ts-expect-error Headers might not support string indexing directly depending on type
-    headers['Content-Type'] = 'application/json'
-  }
-
+  let token: string | undefined;
   try {
-    const response = await fetch(url, { ...options, headers })
-
-    if (response.status === 503 && !isRetry) {
-      // Retry once for Render cold starts
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      return apiFetch(path, options, true)
-    }
-
-    if (!response.ok) {
-      let errorMessage = "An unknown API error occurred"
-      let errorCode = "unknown_error"
-
-      try {
-        const rawBody = await response.json()
-        const parsed = ApiErrorSchema.safeParse(rawBody)
-        if (parsed.success) {
-          errorMessage = parsed.data.error.message
-          errorCode = parsed.data.error.code
-        } else if (rawBody.detail) {
-          // Fallback for standard FastAPI validation errors or standard detail strings
-          errorMessage = Array.isArray(rawBody.detail) ? JSON.stringify(rawBody.detail) : rawBody.detail
-          errorCode = "validation_error"
-        }
-      } catch {
-        // Body was not JSON
-        errorMessage = response.statusText
-        errorCode = `http_${response.status}`
-      }
-
-      throw new ApiError(errorMessage, errorCode)
-    }
-
-    if (response.status === 204) {
-      return undefined as unknown as T
-    }
-
-    return await response.json()
+    token = (await createClient().auth.getSession()).data.session?.access_token;
+  } catch {}
+  const headers = new Headers(options.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (options.body && !headers.has("Content-Type"))
+    headers.set("Content-Type", "application/json");
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, { ...options, headers });
   } catch (error) {
-    if (error instanceof TypeError && !isRetry) {
-      // Network failure (could be cold start connection refused)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      return apiFetch(path, options, true)
+    if (attempt === 0) {
+      coldStart?.(true);
+      await pause();
+      const result = await apiFetch(path, schema, options, 1);
+      coldStart?.(false);
+      return result;
     }
-    throw error
+    throw new ApiError(
+      "Unable to reach Readout. Please try again.",
+      "network_error",
+      0,
+      error,
+    );
   }
+  if (response.status === 503 && attempt === 0) {
+    coldStart?.(true);
+    await pause();
+    const result = await apiFetch(path, schema, options, 1);
+    coldStart?.(false);
+    return result;
+  }
+  if (!response.ok) {
+    let code = `http_${response.status}`,
+      message = response.statusText || "Request failed";
+    try {
+      const parsed = S.ApiErrorBody.safeParse(await response.json());
+      if (parsed.success) {
+        code = parsed.data.error.code;
+        message = parsed.data.error.message;
+      }
+    } catch {}
+    throw new ApiError(message, code, response.status);
+  }
+  if (response.status === 204) return undefined as T;
+  const body = await response.json();
+  const parsed = schema.safeParse(body);
+  if (!parsed.success)
+    throw new ApiError(
+      "The server returned an unexpected response.",
+      "invalid_response",
+      502,
+      parsed.error,
+    );
+  return parsed.data;
 }
-
-export const apiClient = {
-  getDatasets: () => apiFetch<DatasetListItem[]>('/datasets'),
-  
-  askQuestion: (datasetId: string, question: string, sessionId?: string | null) => 
-    apiFetch<AskResponse>('/ask', {
-      method: 'POST',
-      body: JSON.stringify({
-        dataset_id: datasetId,
-        question,
-        session_id: sessionId || null
-      })
+const body = (value: unknown) => JSON.stringify(value);
+export const api = {
+  getDatasets: () => apiFetch("/datasets", z.array(S.Dataset)),
+  getSchema: (id: string) => apiFetch(`/datasets/${id}/schema`, S.Schema),
+  getProfile: (id: string) => apiFetch(`/datasets/${id}/profile`, S.Profile),
+  getAnalysisConfig: (id: string) => apiFetch(`/datasets/${id}/analysis-config`, S.AnalysisConfig),
+  saveAnalysisConfig: (id: string, input: S.AnalysisConfigInputT) => apiFetch(`/datasets/${id}/analysis-config`, S.AnalysisConfig, {method:"PUT",body:body(input)}),
+  previewAnalysisConfig: (id: string, input: S.AnalysisConfigInputT) => apiFetch(`/datasets/${id}/analysis-config/preview`, S.DatasetOverview, {method:"POST",body:body(input)}),
+  getOverview: (id: string) => apiFetch(`/datasets/${id}/overview`, S.DatasetOverview),
+  profile: (id: string) =>
+    apiFetch(`/datasets/${id}/profile`, S.Profile, { method: "POST" }),
+  uploadUrl: (input: {
+    filename: string;
+    file_size_bytes: number;
+    description?: string | null;
+  }) =>
+    apiFetch("/datasets/upload-url", S.UploadUrl, {
+      method: "POST",
+      body: body({ ...input, description: input.description ?? null }),
     }),
-
-  getUploadUrl: (filename: string, file_size_bytes: number, description?: string | null) =>
-    apiFetch<UploadUrlResponse>('/datasets/upload-url', {
-      method: 'POST',
-      body: JSON.stringify({
-        filename,
-        file_size_bytes,
-        description: description || null
-      })
+  deleteDataset: (id: string) =>
+    apiFetch(`/datasets/${id}`, z.void(), { method: "DELETE" }),
+  ask: (input: {
+    dataset_id: string;
+    question: string;
+    session_id: string | null;
+    persist?: boolean;
+  }) => apiFetch("/ask", S.Ask, { method: "POST", body: body(input) }),
+  createWidget: (input: {
+    dashboard_id: string;
+    source_type: "ask_message" | "insight" | "anomaly";
+    source_id: string;
+    title?: string;
+    position?: number;
+  }) => apiFetch("/widgets", S.Widget, { method: "POST", body: body(input) }),
+  getWidgets: (id: string) =>
+    apiFetch(`/dashboards/${id}/widgets`, z.array(S.Widget)),
+  updateWidget: (id: string, input: { title?: string; position?: number }) =>
+    apiFetch(`/widgets/${id}`, S.Widget, {
+      method: "PATCH",
+      body: body(input),
     }),
-
-  profileDataset: (datasetId: string) =>
-    apiFetch<ProfileResponse>(`/datasets/${datasetId}/profile`, {
-      method: 'POST'
+  deleteWidget: (id: string) =>
+    apiFetch(`/widgets/${id}`, z.void(), { method: "DELETE" }),
+  updateLayout: (
+    id: string,
+    widgets: { widget_id: string; position: number }[],
+  ) =>
+    apiFetch(`/dashboards/${id}/layout`, S.Layout, {
+      method: "PATCH",
+      body: body({ widgets }),
     }),
-
-  getDatasetProfile: (datasetId: string) =>
-    apiFetch<ProfileResponse>(`/datasets/${datasetId}/profile`),
-
-  deleteDataset: (datasetId: string) =>
-    apiFetch<void>(`/datasets/${datasetId}`, {
-      method: 'DELETE'
-    })
+  getInsights: (id: string) =>
+    apiFetch(`/datasets/${id}/insights`, z.array(S.Insight)),
+  generateInsights: (id: string) =>
+    apiFetch(`/datasets/${id}/insights/generate`, z.array(S.Insight), {
+      method: "POST",
+    }),
+  getAnomalies: (id: string) =>
+    apiFetch(`/datasets/${id}/anomalies`, z.array(S.Anomaly)),
+  scanAnomalies: (id: string) =>
+    apiFetch(`/datasets/${id}/anomalies/scan`, z.array(S.Anomaly), {
+      method: "POST",
+    }),
+  deleteAnomaly: (id: string) =>
+    apiFetch(`/anomalies/${id}`, z.void(), { method: "DELETE" }),
 };
+export function uploadBinary(
+  url: string,
+  file: File,
+  onProgress: (percent: number) => void,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", "text/csv");
+    xhr.upload.onprogress = (e) =>
+      e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(
+            new ApiError(
+              "The file upload failed.",
+              "upload_failed",
+              xhr.status,
+            ),
+          );
+    xhr.onerror = () =>
+      reject(
+        new ApiError("The file upload was interrupted.", "network_error", 0),
+      );
+    xhr.send(file);
+  });
+}
