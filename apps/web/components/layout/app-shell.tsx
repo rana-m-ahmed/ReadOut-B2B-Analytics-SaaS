@@ -1,7 +1,7 @@
 "use client";
 
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
+import { Sidebar } from "./sidebar";
+import { TopBar } from "./topbar";
 import { MobileNav } from "./mobile-nav";
 import { ColdStartIndicator } from "@/components/ui/cold-start-indicator";
 import { useAppStore } from "@/stores/app-store";
