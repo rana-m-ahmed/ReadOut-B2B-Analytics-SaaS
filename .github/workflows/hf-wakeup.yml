@@ -1,0 +1,24 @@
+name: hf-space-wakeup
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Hugging Face backend
+        env:
+          BACKEND_URL: https://rana-m-ahmed-readout.hf.space
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS "$BACKEND_URL/health"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Backend wakeup ping failed"
+          exit 1
