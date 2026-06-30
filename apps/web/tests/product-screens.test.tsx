@@ -178,6 +178,10 @@ describe("complete product screens", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText("Confirm"));
     await waitFor(() => expect(api.deleteDataset).toHaveBeenCalledWith(dataset.id));
+    await waitFor(() =>
+      expect(screen.queryByText("Sales review")).not.toBeInTheDocument(),
+    );
+    expect(await screen.findByText(/deleted/i)).toBeInTheDocument();
   });
 
   it("shows insight empty state and generates a real feed", async () => {
