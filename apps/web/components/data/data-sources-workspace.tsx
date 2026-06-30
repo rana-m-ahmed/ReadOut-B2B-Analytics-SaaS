@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Database, Trash2, Upload } from "lucide-react";
-import { api } from "@/lib/api/client";
+import { ApiError, api } from "@/lib/api/client";
 import type { DatasetT, ProfileT } from "@/lib/api/types";
 import { useAppStore } from "@/stores/app-store";
 import { CsvUploader } from "@/components/onboarding/csv-uploader";
@@ -100,11 +100,15 @@ export function DataSourcesWorkspace() {
         delete next[snapshot.dataset.id];
         return next;
       });
-    } catch {
+    } catch (cause) {
       setDatasets(snapshot.previousDatasets);
       setActive(snapshot.previousActive);
       setStatus("");
-      setError("Readout could not delete that dataset. The source was restored.");
+      const message =
+        cause instanceof ApiError
+          ? cause.message
+          : "Readout could not delete that dataset. The source was restored.";
+      setError(message);
     } finally {
       setPendingDelete(null);
     }
@@ -153,8 +157,8 @@ export function DataSourcesWorkspace() {
           aria-live="polite"
           className={`mb-4 rounded-xl p-3 text-sm ${
             error
-              ? "bg-[color-mix(in_srgb,var(--warning)_12%,white)]"
-              : "bg-[color-mix(in_srgb,var(--success)_12%,white)]"
+              ? "border border-[color-mix(in_srgb,var(--danger)_25%,transparent)] bg-[color-mix(in_srgb,var(--danger)_10%,var(--marketing-ink))] text-white"
+              : "border border-[rgba(168,255,120,.18)] bg-[color-mix(in_srgb,var(--success)_10%,var(--marketing-ink))] text-white"
           }`}
         >
           {error || status}

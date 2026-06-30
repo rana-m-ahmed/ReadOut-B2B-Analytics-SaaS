@@ -354,5 +354,12 @@ async def delete_dataset(
         dataset_repository,
     )
     
+    dataset_repository._client.table("dataset_analysis_configs").delete().eq(
+        "dataset_id", str(dataset.id)
+    ).execute()
     dataset_repository.delete(workspace.id, dataset.id)
+    try:
+        DatasetStorageService().remove_dataset_artifacts(workspace.owner_user_id, dataset.id)
+    except Exception:
+        pass
     return Response(status_code=204)

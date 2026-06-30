@@ -10,7 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db.models import WorkspaceCreate
-from app.db.repositories import DatasetRepository, WorkspaceRepository
+from app.db.repositories import (
+    DatasetColumnRepository,
+    DatasetRepository,
+    WorkspaceRepository,
+)
 
 
 API_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
@@ -66,6 +70,7 @@ def test_routes_datasets_live_round_trip_and_rejections(monkeypatch: pytest.Monk
 
     workspace_repo = WorkspaceRepository()
     dataset_repo = DatasetRepository()
+    column_repo = DatasetColumnRepository()
     supabase = workspace_repo._client
     app = create_app()
     client = TestClient(app)
@@ -149,6 +154,45 @@ def test_routes_datasets_live_round_trip_and_rejections(monkeypatch: pytest.Monk
                 "missing_percent": 0.0,
             },
         ]
+
+        columns = column_repo.list_for_dataset(workspace_id, dataset_id)
+        month_column = next(column for column in columns if column.name == "month")
+        revenue_column = next(column for column in columns if column.name == "revenue")
+        supabase.rpc(
+            "activate_dataset_analysis_config",
+            {
+                "p_dataset_id": str(dataset_id),
+                "p_created_by": str(user_id),
+                "p_base_version": 0,
+                "p_primary_time_column_id": str(month_column.id),
+                "p_metrics": [
+                    {
+                        "column_id": str(revenue_column.id),
+                        "label": "Revenue",
+                        "aggregation": "sum",
+                        "display_format": "number",
+                        "position": 0,
+                        "is_primary": True,
+                    }
+                ],
+                "p_dimensions": [
+                    {
+                        "column_id": str(month_column.id),
+                        "label": "Month",
+                        "position": 0,
+                    }
+                ],
+            },
+        ).execute()
+
+        delete_response = client.delete(f"/datasets/{dataset_id}", headers=auth_headers)
+        assert delete_response.status_code == 204
+        assert dataset_repo.get_by_id(workspace_id, dataset_id) is None
+
+        post_delete_list_response = client.get("/datasets", headers=auth_headers)
+        assert post_delete_list_response.status_code == 200
+        assert all(item["id"] != str(dataset_id) for item in post_delete_list_response.json())
+        dataset_id = None
 
         oversized_response = client.post(
             "/datasets/upload-url",
