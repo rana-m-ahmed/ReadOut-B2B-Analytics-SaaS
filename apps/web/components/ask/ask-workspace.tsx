@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Pin, RefreshCw, Send, SlidersHorizontal, Sparkles } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/queryKeys";
@@ -20,6 +20,7 @@ export function AskWorkspace() {
   const collapsed = useAppStore((state) => state.sidebarCollapsed);
   const session = useAppStore((state) => state.askSession);
   const setSession = useAppStore((state) => state.setAskSession);
+  const queryClient = useQueryClient();
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -71,6 +72,7 @@ export function AskWorkspace() {
     try {
       const dashboard_id = await getDefaultDashboard();
       await api.createWidget({ dashboard_id, source_type: "ask_message", source_id: answer.answer_id, title: answer.chart?.title });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.widgets.list(dataset!) });
       setNotice("Pinned to your overview.");
     } catch {
       setNotice("This answer could not be pinned. Nothing was changed.");
